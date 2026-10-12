@@ -9,11 +9,12 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Protocol
 
+from prometheus_client import Counter
 from sqlalchemy import insert
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.db import UsageRow
+from app.db import Base, UsageRow
 from app.observability import metrics
 
 log = logging.getLogger(__name__)
@@ -86,6 +87,12 @@ class UsageRecord:
         return out
 
 
+class Row(Protocol):
+    """Anything the batch writer can insert."""
+
+    def row(self) -> dict[str, Any]: ...
+
+
 class UsageSink(Protocol):
     def submit(self, record: UsageRecord) -> None: ...
 
@@ -102,7 +109,9 @@ class MemoryUsageSink:
 
 class PostgresUsageWriter:
     """Queue + one background task that inserts batches. `submit` never blocks or raises:
-    if the queue is full (Postgres slow or down), the row is dropped and counted."""
+    if the queue is full (Postgres slow or down), the row is dropped and counted.
+
+    `table` and `dropped` let another append-only log reuse it (the decision log)."""
 
     def __init__(
         self,
@@ -110,23 +119,28 @@ class PostgresUsageWriter:
         max_queue: int = 10_000,
         batch_size: int = 100,
         flush_seconds: float = 1.0,
+        table: type[Base] = UsageRow,
+        dropped: Counter | None = None,
     ) -> None:
         self.sessions = sessions
         self.batch_size, self.flush_seconds = batch_size, flush_seconds
+        self.table = table
+        self.dropped = dropped if dropped is not None else metrics.usage_dropped
+        self.what = table.__tablename__
         # None is the stop sentinel: the writer finishes its current batch, then exits.
-        self.queue: asyncio.Queue[UsageRecord | None] = asyncio.Queue(maxsize=max_queue)
+        self.queue: asyncio.Queue[Row | None] = asyncio.Queue(maxsize=max_queue)
         self._task: asyncio.Task[None] | None = None
 
-    def submit(self, record: UsageRecord) -> None:
+    def submit(self, record: Row) -> None:
         try:
             self.queue.put_nowait(record)
         except asyncio.QueueFull:
-            metrics.usage_dropped.inc()
+            self.dropped.inc()
 
     def start(self) -> None:
         self._task = asyncio.create_task(self._run())
 
-    async def _take_batch(self) -> tuple[list[UsageRecord], bool]:
+    async def _take_batch(self) -> tuple[list[Row], bool]:
         """Up to batch_size rows or flush_seconds, whichever first. → (rows, stop?)"""
         first = await self.queue.get()
         if first is None:
@@ -149,17 +163,17 @@ class PostgresUsageWriter:
 
     async def _insert(self, rows: list[dict[str, Any]]) -> None:
         async with self.sessions() as s, s.begin():
-            await s.execute(insert(UsageRow), rows)
+            await s.execute(insert(self.table), rows)
 
-    async def _write(self, batch: list[UsageRecord]) -> None:
+    async def _write(self, batch: list[Row]) -> None:
         rows = [r.row() for r in batch]
         try:
             await self._insert(rows)
             return
         except Exception as exc:
             if len(rows) == 1:
-                metrics.usage_dropped.inc()
-                log.error("usage row dropped: %s", type(exc).__name__)
+                self.dropped.inc()
+                log.error("%s row dropped: %s", self.what, type(exc).__name__)
                 return
         # The batch failed. Maybe one bad row, maybe Postgres is down: try the rows one by
         # one. A row Postgres rejects costs only that row; a few consecutive connection
@@ -170,20 +184,21 @@ class PostgresUsageWriter:
                 await self._insert([row])
                 failures = 0
             except Exception as exc:
-                metrics.usage_dropped.inc()
+                self.dropped.inc()
                 if not _outage(exc):
-                    log.error("usage row rejected: %s", type(exc).__name__)
+                    log.error("%s row rejected: %s", self.what, type(exc).__name__)
                     continue
                 failures += 1
                 if failures >= self.MAX_CONSECUTIVE_FAILURES:
-                    metrics.usage_dropped.inc(len(rows) - i - 1)
+                    self.dropped.inc(len(rows) - i - 1)
                     log.error(
-                        "usage log write failed (%d rows dropped): %s",
+                        "%s write failed (%d rows dropped): %s",
+                        self.what,
                         len(rows) - i - 1 + failures,
                         type(exc).__name__,
                     )
                     return
-                log.error("usage row rejected: %s", type(exc).__name__)
+                log.error("%s row rejected: %s", self.what, type(exc).__name__)
 
     async def _run(self) -> None:
         while True:
@@ -210,7 +225,7 @@ class PostgresUsageWriter:
             await self._write(pending[i : i + self.batch_size])
 
 
-def iter_nowait(queue: asyncio.Queue[UsageRecord | None]) -> list[UsageRecord | None]:
+def iter_nowait(queue: asyncio.Queue[Row | None]) -> list[Row | None]:
     items = []
     while not queue.empty():
         items.append(queue.get_nowait())

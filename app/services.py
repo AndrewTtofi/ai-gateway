@@ -20,6 +20,7 @@ from app.admin_auth import AuditStore, MemoryAuditStore, PostgresAuditStore
 from app.auth import CachedKeys, MemoryKeyStore, PostgresKeyStore
 from app.cache import CacheStore, MemoryCacheStore, RedisCacheStore
 from app.db import make_engine, make_sessions
+from app.decisions import DecisionSink, MemoryDecisionSink, PostgresDecisionWriter
 from app.judge import Judge, MemoryScoreStore, PostgresScoreStore
 from app.observability.usage import MemoryUsageSink, PostgresUsageWriter, UsageSink
 from app.ratelimit import (
@@ -42,8 +43,10 @@ usage: UsageSink = MemoryUsageSink()
 response_cache: CacheStore = MemoryCacheStore()  # ADR 0018
 judge: Judge = Judge(MemoryScoreStore())  # ADR 0022
 audit: AuditStore = MemoryAuditStore()  # admin changes (ADR 0025)
+decisions: DecisionSink = MemoryDecisionSink()  # governance decisions (ADR 0028)
 alerts: Any = None  # app.routing.selfheal.Alerts, set at startup (breaker and budget alerts)
 _writer: PostgresUsageWriter | None = None
+_decision_writer: PostgresDecisionWriter | None = None
 
 log = logging.getLogger(__name__)
 
@@ -54,7 +57,7 @@ _engine: AsyncEngine | None = None
 
 async def start() -> None:
     global keys, limiter, spend, usage, response_cache, judge, _redis, _engine, _writer, started
-    global _cache_redis, audit
+    global _cache_redis, audit, decisions, _decision_writer
     if config.settings.gateway_stores == "memory":
         router.store = MemoryBreakerStore()
         judge.start()
@@ -70,6 +73,9 @@ async def start() -> None:
     _writer = PostgresUsageWriter(sessions)
     _writer.start()
     usage = _writer
+    _decision_writer = PostgresDecisionWriter(sessions)
+    _decision_writer.start()
+    decisions = _decision_writer
     limiter = RedisLimiter(_redis)
     if config.settings.cache_redis_url:
         _cache_redis = Redis.from_url(
@@ -92,7 +98,7 @@ async def start() -> None:
 
 
 async def stop() -> None:
-    global _redis, _cache_redis, _engine, _writer, _deps_task, started
+    global _redis, _cache_redis, _engine, _writer, _deps_task, started, _decision_writer
     started = False
     await judge.stop()
     if _deps_task is not None:
@@ -101,6 +107,9 @@ async def stop() -> None:
     if _writer is not None:
         await _writer.stop()  # flush queued usage rows before the engine goes
         _writer = None
+    if _decision_writer is not None:
+        await _decision_writer.stop()
+        _decision_writer = None
     if _redis is not None:
         await _redis.aclose()
         _redis = None

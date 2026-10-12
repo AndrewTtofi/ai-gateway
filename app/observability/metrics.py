@@ -59,6 +59,17 @@ attempts = Counter(
 rejected = Counter(
     "gateway_rejected_total", "Requests rejected before routing.", ["reason"], registry=registry
 )  # unauthenticated / model_not_allowed / rate_limit / budget / concurrency …
+decisions = Counter(
+    "gateway_decisions_total",
+    "Governance decisions (ADR 0028).",
+    ["decision", "code"],  # allow | deny; code is a fixed name
+    registry=registry,
+)
+decisions_dropped = Counter(
+    "gateway_decision_log_dropped_total",
+    "Decision records not written to Postgres (still in the audit log line).",
+    registry=registry,
+)
 breaker = Gauge(
     "gateway_circuit_state",
     "Circuit breaker per target: 0 closed, 1 half-open, 2 open.",
