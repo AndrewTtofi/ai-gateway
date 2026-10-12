@@ -4,8 +4,10 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import config, main, providers, services
+from app.access import AccessPolicy
 from app.auth import ApiKey, CachedKeys, MemoryKeyStore, generate_key, hash_key
 from app.config import Registry
+from app.decisions import MemoryDecisionSink
 from app.observability.usage import MemoryUsageSink
 from app.providers import AdapterPool
 from app.ratelimit import Concurrency, MemoryLimiter, MemorySpend
@@ -22,6 +24,21 @@ UNLIMITED = {
     "monthly_budget_usd": 10**9,
     "allowed_aliases": ["*"],
 }
+
+
+# Every model may hold every class of data, so tests of routing, limits and providers are
+# not also tests of the access policy. tests/test_access.py and test_governance.py use
+# stricter ones.
+OPEN_POLICY = AccessPolicy.model_validate(
+    {
+        "version": "test",
+        "data_classes": ["public", "internal", "confidential", "restricted"],
+        "default_data_class": "internal",
+        "tier_rank": ["dev", "standard"],
+        "models": {"*": {"retention": "none", "max_data_class": "restricted"}},
+        "secondary_use_max_data_class": "restricted",
+    }
+)
 
 
 def add_key(tier: str = "dev", **overrides: object) -> str:
@@ -49,6 +66,8 @@ def api_key(monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setattr(services, "spend", MemorySpend())
     monkeypatch.setattr(services, "usage", MemoryUsageSink())
     monkeypatch.setattr(services, "concurrency", Concurrency())
+    monkeypatch.setattr(services, "decisions", MemoryDecisionSink())
+    monkeypatch.setattr(config, "access", OPEN_POLICY)
     return add_key("chaos", **UNLIMITED)  # the chaos tier has no concurrency limit
 
 

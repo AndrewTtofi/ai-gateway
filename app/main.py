@@ -1,7 +1,8 @@
 """Gateway entrypoint: routes. The pipeline for a chat request is
 
-authenticate → model allowed? → budget left? → rate limits (estimate) →
-route (retries, fallback, breakers) → reconcile tokens + add cost
+authenticate → policy (tier, data class) → budget left? → rate limits (estimate) →
+route (retries, fallback, breakers; only models eligible for the data) →
+reconcile tokens + add cost. Every policy and spend decision is recorded (ADR 0028).
 
 Two client formats share it: OpenAI chat completions (`/v1/chat/completions`, also the
 internal format) and Anthropic Messages (`/v1/messages`, translated at the edge, ADR 0010).
@@ -17,6 +18,7 @@ import signal
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Annotated, Any, Literal
 
 import anyio
@@ -30,6 +32,8 @@ from app import (
     admin_auth,
     cache,
     config,
+    connectors,
+    decisions,
     extensions,
     guardrails,
     judge,
@@ -37,6 +41,7 @@ from app import (
     providers,
     services,
 )
+from app.access import DATA_CLASS_HEADER, Principal, principal_for_key
 from app.auth import ApiKey, EffectiveLimits
 from app.errors import error_response, routing_error_response
 from app.metering import Meter
@@ -659,6 +664,49 @@ async def count_tokens(request: Request, key: Authenticated) -> dict[str, int] |
     return {"input_tokens": estimate_prompt_tokens(oai["messages"], cpt, oai.get("tools"))}
 
 
+class ToolCall(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    args: dict[str, Any] = {}
+
+
+@app.post("/v1/tools/{connector}/{tool}", response_model=None)
+async def call_tool(
+    connector: str, tool: str, call: ToolCall, request: Request, key: Authenticated
+) -> dict[str, Any] | JSONResponse:
+    """Call one tool of a connector, behind the same policy as model calls (ADR 0028):
+    the connector must be onboarded in policy.yaml, the caller's tier and role must allow
+    it, and it must be eligible for the data class. Allowed or denied, it is recorded."""
+    lim = key_limits(key)
+    # Path segments are client input: bounded before they reach the log or the database.
+    who = _governed(request, key, f"tool:{connector[:64]}.{tool[:64]}")
+    if isinstance(who, JSONResponse):
+        return who
+    verdict = config.access.check_connector(who.principal, connector, who.data_class)
+    if not verdict.allowed:
+        return who.deny(403, verdict.code, verdict.reason)
+    target = connectors.REGISTRY.get(connector)
+    if target is None or tool not in target.tools:
+        return who.deny(403, "tool_not_exposed", f"'{connector}' does not expose that tool")
+    # One request against the key's rate limit, no tokens (like count_tokens).
+    taken = await services.limiter.take(key.id, lim.requests_per_minute, lim.tokens_per_minute, 0)
+    if not taken.allowed:
+        metrics.rejected.labels("rate_limit").inc()
+        return error_response(
+            429,
+            "Rate limit reached for this key.",
+            "rate_limit_error",
+            "rate_limit_exceeded",
+            headers=taken.headers(),
+        )
+    who.allow()
+    try:
+        result = await target.call(tool, call.args, await target.credential())
+    except connectors.ConnectorError as exc:
+        return error_response(502, str(exc), "api_error", "connector_error")
+    return {"connector": connector, "tool": tool, "result": result}
+
+
 async def _read_json(request: Request) -> dict[str, Any] | str:
     """The body as a JSON object, or what's wrong with it."""
     try:
@@ -707,26 +755,19 @@ async def _chat(
     `anthropic_client`: the caller speaks the Messages API and gets the Anthropic-only
     extension fields (thinking blocks); OpenAI clients never do (ADR 0013)."""
     lim = key_limits(key)
+    who = _governed(request, key, f"model:{body.model}")
+    if isinstance(who, JSONResponse):
+        return who
     if not lim.allows(body.model):
-        metrics.rejected.labels("model_not_allowed").inc()
-        return error_response(
-            403,
-            f"This key may not use model '{body.model}'",
-            "permission_error",
-            "model_not_allowed",
-            param="model",
+        return who.deny(
+            403, "model_not_allowed", f"This key may not use model '{body.model}'", param="model"
         )
 
     # Budgets (ADR 0007, 0023) are enforced by the reservation before routing: one atomic
     # check-and-hold per counter, so no separate read of the spend is needed here.
     if key.team and key.team not in config.limits.teams:
         # Fail closed: a team removed from limits.yaml mustn't mean "no team budget".
-        return error_response(
-            403,
-            f"key team {key.team!r} is not configured",
-            "permission_error",
-            "team_unknown",
-        )
+        return who.deny(403, "team_unknown", f"key team {key.team!r} is not configured")
 
     # Requests in flight for this key (ADR 0023). Freed when the request settles.
     release = services.concurrency.acquire(key.id, lim.concurrent_requests)
@@ -752,7 +793,7 @@ async def _chat(
     meter.release = release
     try:
         return await _serve(
-            body, request, key, meter, messages, tools, rl_headers, fmt, anthropic_client
+            body, request, key, meter, messages, tools, rl_headers, fmt, anthropic_client, who
         )
     except BaseException:
         # A bug or a cancellation before the request reached a provider: still settle,
@@ -761,6 +802,53 @@ async def _chat(
             meter.status, meter.error_code = 500, "gateway_error"
         await _settle_shielded(meter)
         raise
+
+
+@dataclass
+class Governed:
+    """Who is asking, for what, with which class of data: what the policy checks and the
+    decision log records (ADR 0028)."""
+
+    principal: Principal
+    action: str  # "model:<alias>" or "tool:<connector>.<tool>"
+    data_class: str
+
+    def allow(self, **detail: Any) -> None:
+        decisions.record(self.principal, self.action, self.data_class, "allow", **detail)
+
+    def deny(
+        self,
+        status: int,
+        code: str,
+        message: str,
+        type_: str = "permission_error",
+        param: str | None = None,
+        headers: dict[str, str] | None = None,
+        **detail: Any,
+    ) -> JSONResponse:
+        """Record the denial and build the error the caller gets."""
+        metrics.rejected.labels(code).inc()
+        decisions.record(
+            self.principal, self.action, self.data_class, "deny", code, message, **detail
+        )
+        return error_response(status, message, type_, code, param=param, headers=headers)
+
+
+def _governed(request: Request, key: ApiKey, action: str) -> Governed | JSONResponse:
+    """The caller as a principal, and the data class the request declares (the
+    `x-gateway-data-class` header, else the policy's default). An unknown class is a
+    malformed request: 400, and nothing to decide."""
+    policy = config.access
+    declared = request.headers.get(DATA_CLASS_HEADER, "").strip().lower()
+    data_class = declared or policy.default_data_class
+    if data_class not in policy.data_classes:
+        return error_response(
+            400,
+            f"Unknown data class in {DATA_CLASS_HEADER}. One of: {', '.join(policy.data_classes)}.",
+            code="invalid_data_class",
+            param=DATA_CLASS_HEADER,
+        )
+    return Governed(principal_for_key(key, policy), action, data_class)
 
 
 async def _admit(
@@ -842,9 +930,16 @@ async def _serve(
     rl_headers: dict[str, str],
     fmt: StreamFormat | None,
     anthropic_client: bool,
+    who: Governed,
 ) -> JSONResponse | StreamingResponse | Response:
-    """After admission: guardrails, A/B arm, judge sampling, cache, routing."""
+    """After admission: guardrails, A/B arm, judge sampling, cache, data-class eligibility,
+    routing."""
     prompt_estimate = meter.prompt_estimate
+    access = config.access
+    rl_headers[DATA_CLASS_HEADER] = who.data_class  # what was applied, default included
+    # The cache and the judge copy prompt content elsewhere: only up to the class the
+    # policy allows for that (ADR 0028).
+    secondary_use = access.allows_secondary_use(who.data_class)
     # Prompt-injection filter (ADR 0021), per the key's tier.
     action = config.limits.tiers[key.tier].injection if key.tier in config.limits.tiers else "log"
     guard = await guardrails.check(messages, action, tools, key)
@@ -862,10 +957,11 @@ async def _serve(
         if action == "block":
             meter.status, meter.error_code = 400, "prompt_injection_detected"
             await meter.settle()
-            return error_response(
+            return who.deny(
                 400,
+                "prompt_injection_detected",
                 "The request was blocked by the gateway's prompt-injection filter.",
-                code="prompt_injection_detected",
+                "invalid_request_error",
                 headers={**rl_headers, "x-gateway-guardrail": "blocked"},  # no rule names
             )
         if action == "flag":
@@ -886,6 +982,7 @@ async def _serve(
     if (
         alias_cfg is not None
         and alias_cfg.judge is not None
+        and secondary_use
         and (body.n or 1) == 1  # one answer to grade
         and judge.sampled(alias_cfg.judge)
     ):
@@ -895,12 +992,13 @@ async def _serve(
         meter.judge_conversation = text[-alias_cfg.judge.max_chars :]  # bounded in memory
         if body.stream and meter.collector is None:
             meter.collector = cache.Collector()  # to assemble the streamed answer
-    if alias_cfg is not None and alias_cfg.cache is not None:
+    if alias_cfg is not None and alias_cfg.cache is not None and secondary_use:
         cache_alias = f"{body.model}#{variant.name}" if variant else body.model
         hit = await _cache_lookup(
             body, request, key, meter, alias_cfg.cache, rl_headers, cache_alias
         )
         if hit is not None:
+            who.allow(served="cache")  # nothing is sent to a model
             return _serve_cached(hit, body, meter, rl_headers, fmt, anthropic_client)
     try:
         chain = config.registry.resolve(body.model)
@@ -914,9 +1012,15 @@ async def _serve(
         # Policy routing (ADR 0017): this request's chain, from the catalog.
         try:
             hints = _route_hints(body, request)
+            routing = policy.effective(alias.policy, hints)
+            # Choose only among models eligible for this data (ADR 0028), so an
+            # ineligible one can't take a place in the chain from one that could serve.
+            pool, _ = access.eligible(policy.candidates(body.model, routing), who.data_class)
+            if pool:
+                routing = routing.model_copy(update={"candidates": pool})
             plan = await policy.plan(
                 body.model,
-                policy.effective(alias.policy, hints),
+                routing,
                 body.model_dump(exclude_unset=True),
                 prompt_estimate,
             )
@@ -943,25 +1047,54 @@ async def _serve(
     else:
         chain = []  # the router resolves the alias itself
     try:
-        first = chain[0] if chain else config.registry.resolve(body.model)[0]
+        full = chain or list(config.registry.resolve(body.model))
+        if not full:
+            raise IndexError(body.model)
     except KeyError, IndexError:  # the alias vanished in a config reload mid-request
         meter.status, meter.error_code = 404, "model_not_found"
         meter.alias_label = "_unknown"
         await meter.settle()
         return _unknown(body)
+    # Data handling (ADR 0028): only the targets allowed to hold this class of data stay
+    # in the chain, so no retry or fallback can send it anywhere else.
+    eligible, excluded = access.eligible(full, who.data_class)
+    if not eligible:
+        meter.status, meter.error_code = 403, "data_class_not_eligible"
+        await meter.settle()
+        return who.deny(
+            403,
+            "data_class_not_eligible",
+            f"No model behind '{body.model}' is eligible for '{who.data_class}' data.",
+            param=DATA_CLASS_HEADER,
+            headers=rl_headers,
+            excluded=excluded,
+        )
+    if excluded:
+        chain = eligible
+        rl_headers["x-gateway-excluded"] = str(len(excluded))
+    first = eligible[0]
     team_budget = config.limits.teams.get(key.team) if key.team else None
     refused = await meter.reserve(first, team_budget.monthly_budget_usd if team_budget else None)
     if refused:
-        metrics.rejected.labels(refused).inc()
         meter.status, meter.error_code = 429, "insufficient_quota"
         await meter.settle()
         whose = "this key's team" if refused == "team_budget" else "this key"
+        metrics.rejected.labels(refused).inc()
+        decisions.record(
+            who.principal,
+            who.action,
+            who.data_class,
+            "deny",
+            refused,
+            f"Monthly budget for {whose} is exhausted.",
+        )
         return error_response(
             429,
             f"Monthly budget for {whose} is exhausted.",
             "insufficient_quota",
             "insufficient_quota",
         )
+    who.allow(chain=eligible, excluded=excluded)
     if body.stream:
         # Always ask the provider for usage so streams can be metered (ADR 0007); the
         # meter drops the usage chunk again if the client didn't ask for it. Keep any
@@ -1322,6 +1455,17 @@ async def admin_audit(
             for e in entries
         ]
     }
+
+
+@app.get("/admin/decisions")
+async def admin_decisions(
+    _: Admin,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
+    decision: Literal["allow", "deny"] | None = None,
+) -> dict[str, Any]:
+    """Recent governance decisions, newest first: who, what, data class, outcome, reason
+    and the policy version that decided (ADR 0028). Never content."""
+    return {"data": [d.public() for d in await services.decisions.recent(limit, decision)]}
 
 
 @app.get("/admin/providers", response_model=None)
