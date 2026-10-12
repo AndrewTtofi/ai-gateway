@@ -1,4 +1,4 @@
-.PHONY: up down logs evals idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
+.PHONY: up down logs decisions evals idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
 
 up:
 	docker compose up -d --build
@@ -65,11 +65,19 @@ lock:
 migrate:
 	docker compose exec gateway alembic upgrade head
 
-# Create a gateway API key:  make key name=my-app tier=dev
+# Create a gateway API key:  make key name=my-app tier=dev [team=compliance] [budget=25]
+# The team is also the key's group for the access policy; budget is its own monthly cap in USD.
+comma := ,
 key:
 	@# The admin key goes to curl on stdin (-H @-), never on the command line where `ps` shows it.
 	@sed -n 's/^GATEWAY_ADMIN_KEY=/Authorization: Bearer /p' .env | curl -s -X POST localhost:8000/admin/keys \
-	  -H @- -H 'content-type: application/json' -d '{"name":"$(name)","tier":"$(or $(tier),dev)"}'; echo
+	  -H @- -H 'content-type: application/json' \
+	  -d '{"name":"$(name)","tier":"$(or $(tier),dev)"$(if $(team),$(comma)"team":"$(team)")$(if $(budget),$(comma)"monthly_budget_usd":$(budget))}'; echo
+
+# The latest governance decisions as a table (ADR 0028):  make decisions [n=10]
+decisions:
+	@sed -n 's/^GATEWAY_ADMIN_KEY=/Authorization: Bearer /p' .env | curl -s 'localhost:8000/admin/decisions?limit=$(or $(n),10)' -H @- \
+	  | python3 -c 'import json,sys; [print(r["at"][11:19], r["decision"].ljust(5), r["code"].ljust(24), r["action"].ljust(34), r["subject_name"].ljust(16), r["data_class"]) for r in json.load(sys.stdin)["data"]]'
 
 # Check config/pricing.yaml + catalog.yaml against public catalogs (ADR 0011).
 # Shows the diff; ARGS=--write applies changes both sources agree on. Review, then `make reload`.
