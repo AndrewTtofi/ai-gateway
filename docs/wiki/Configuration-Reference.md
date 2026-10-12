@@ -29,6 +29,11 @@ Configuration has two layers:
 | `ADMIN_KEYS_FILE` | — | One operator per line: `name sha256-hex-of-key` (`make admin-key name=…`). Re-read when it changes |
 | `ALERTMANAGER_SLACK_URL` | — | (production compose) Where Alertmanager posts Prometheus alerts |
 | `BACKUP_KEEP_DAYS` | 14 | (production compose) How long daily `pg_dump` backups are kept |
+| `OIDC_ISSUER`, `OIDC_AUDIENCE` | — | Accept access tokens from this identity provider: the tokens' `iss`, and a value that must be in their `aud`. Both empty: only gateway API keys ([Identity](Identity.md)) |
+| `OIDC_JWKS_URL`, `OIDC_USER_CLAIM`, `OIDC_USER_MATCH` | from discovery, `sub`, `external_id` | Where the provider's keys are; which claim names the user; which directory attribute it matches |
+| `SCIM_TOKEN` | — | The bearer token the identity provider presents to `/scim/v2`. Empty: SCIM is off |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE` | — | The GitHub connector; the key is a file path. Any empty: the connector answers 503 ([Connectors](Connectors.md)) |
+| `GITHUB_API_URL` | `https://api.github.com` | For GitHub Enterprise Server |
 | `ALERT_WEBHOOK_URL` | — | Slack-compatible webhook for breaker alerts ([Self-healing](Self-Healing.md)); the variable name is set by `self_healing.alert_webhook_env` |
 
 ## `config/models.yaml`
@@ -182,7 +187,7 @@ tiers:
     allowed_aliases: [fast, balanced, smart, local]   # or provider/model names, or "*"
     injection: log                 # prompt-injection filter: off | log | flag | block
     concurrent_requests: 50        # in flight per key and replica; 0 = no limit (default 20)
-teams:                             # optional; keys with `team` also count against its budget
+teams:                             # keys with `team` also count against its budget; the team is the key's group for the policy
   support: { monthly_budget_usd: 500 }
 budget_alerts: [0.5, 0.8, 1.0]     # alert at these shares of a key's or team's budget (ADR 0024)
 ```
@@ -209,7 +214,18 @@ Patterns must compile; names are short lower-case slugs.
 ## `config/policy.yaml`
 
 The access policy: group → role → tier, data classes, a data-handling rule per model,
-connector entitlements, and who approves spend exceptions. Required. See [Governance](Governance.md). `make policy` validates
+connector entitlements, and who approves spend exceptions.
+
+| Key | Meaning |
+|-----|---------|
+| `version` | Stamped on every decision record. Bump it with every change |
+| `data_classes`, `default_data_class` | The classes, least to most sensitive, and the one a request without the header gets |
+| `group_roles`, `role_tiers`, `tier_rank` | Identity-provider group → role → tier; the highest tier wins |
+| `models` | Per `provider/model`, `provider/*` or `*`: `retention` and `max_data_class`. No rule: no data |
+| `secondary_use_max_data_class` | The ceiling for the response cache and judge sampling |
+| `connectors` | Per connector: `min_tier`, `max_data_class`, `allowed_roles`; `external: true` and `tools` for a tool server that asks the gateway for decisions |
+| `delegated_decisions.client_groups` | The services that may call `POST /v1/authorize` |
+| `spend_exceptions` | `approver_groups` and `max_usd` | Required. See [Governance](Governance.md). `make policy` validates
 it against the other files.
 
 ## Reloading

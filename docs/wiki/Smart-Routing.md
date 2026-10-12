@@ -50,6 +50,10 @@ aliases:
 The response says what happened: `x-gateway-route: optimize=cost; considered=12; chain=4`,
 and `x-gateway-provider` names the model that answered.
 
+Models that may not hold the request's data class are removed before the choice is made
+([Governance](Governance.md#data-classes)), so `auto` picks the cheapest, best or fastest
+model among the eligible ones only.
+
 ### Client hints
 
 Clients can **tighten** a policy, never widen it. They can change `optimize`, add `needs`,

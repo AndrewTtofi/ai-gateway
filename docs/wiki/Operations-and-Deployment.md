@@ -107,6 +107,20 @@ Compose. Things to check:
   check) need "CPU always allocated" to run reliably.
 - **Managed Redis and Postgres:** Memorystore / ElastiCache, Cloud SQL / RDS.
 
+## Identity, connectors and policy
+
+- **Identity:** set `OIDC_ISSUER`, `OIDC_AUDIENCE` and `SCIM_TOKEN`, and point your
+  identity provider's SCIM provisioning at `https://<domain>/scim/v2`. That path has to be
+  reachable by the provider; it accepts only its own token ([Identity](Identity.md)).
+- **Connectors:** the GitHub App's key is a mounted file, never a variable
+  ([Connectors](Connectors.md)).
+- **Policy:** `config/policy.yaml` is deployed with the image or the config volume, and
+  applied with `POST /admin/reload`. Bump its `version` with every change
+  ([Governance](Governance.md)).
+- **Day to day:** onboarding, policy and model changes, spend exceptions, secrets and
+  audit evidence are in the
+  [operations runbook](https://github.com/AndrewTtofi/ai-gateway/blob/main/docs/runbook.md).
+
 ## Runbook
 
 | Symptom | Check |

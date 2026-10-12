@@ -1,7 +1,7 @@
 # Contributing
 
-Thanks for your interest! This is a learning-focused personal project (see
-[PLAN.md](PLAN.md)), so the bar is: small, tested, and easy to review.
+Thanks for your interest! This is a personal project (see [PLAN.md](PLAN.md)), so the
+bar is: small, tested, and easy to review.
 
 ## Before you start
 
@@ -36,6 +36,11 @@ These come from [CLAUDE.md](CLAUDE.md) and are enforced in review:
 - **New behaviour needs a test.** Mock providers (`respx` for httpx,
   `httpx2.MockTransport` for the Anthropic SDK). Tests that call paid APIs are marked
   `@pytest.mark.live` and never run in CI.
+- **Decision and audit records never hold content:** no prompts, answers, tool
+  arguments or tokens.
+- **A change to `config/policy.yaml` bumps its `version`** and passes `make policy`.
+- **A new connector** needs a policy entry and tests for an allowed role, a refused role
+  and a refused data class ([Connectors](docs/wiki/Connectors.md#add-a-connector)).
 - Non-obvious decisions get an ADR in `docs/decisions/` (copy `0000-template.md`).
 
 ## Dependencies
@@ -48,13 +53,15 @@ pinned, hashed `requirements*.txt`. Commit both. CI fails if they're out of sync
 1. Branch from `main` (`feat/…`, `fix/…`, `docs/…`).
 2. Use [Conventional Commits](https://www.conventionalcommits.org/):
    `feat(router): add circuit breaker`, `fix(stream): …`, `docs: …`.
-3. `make test` and `make lint` must pass; CI runs both.
+3. `make test`, `make lint` and `make policy` must pass. CI runs them, plus a dependency
+   audit, an image scan, the production stack end to end and the identity flow against a
+   real identity provider.
 4. Add an entry under `[Unreleased]` in [CHANGELOG.md](CHANGELOG.md).
 5. Describe *why*, not just what. If the change touches streaming, provider formats or
    token accounting, explain the non-obvious part — that's the point of the project.
 
 `main` is protected: changes land only through pull requests that pass CI and are
-reviewed by the maintainer. PRs are squash-merged.
+reviewed by the maintainer. PRs are rebase-merged, so keep commits small and meaningful.
 
 ## License
 

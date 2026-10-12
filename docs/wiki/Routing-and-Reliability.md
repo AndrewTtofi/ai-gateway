@@ -11,6 +11,18 @@ ADRs: 0002 (streaming errors), 0004 (retries, fallback, breakers), 0005 (mid-str
 3. Anything else is a 404 `model_not_found`. Arbitrary names would each create breaker
    state, which an attacker could make unbounded.
 
+### Only the models allowed to hold the data
+
+Before any target is tried, the chain is cut down to the models whose data-handling rule
+in `config/policy.yaml` allows the request's data class
+([Governance](Governance.md#data-classes)). Retries, fallback and breakers then work
+inside what is left:
+
+- the response carries `x-gateway-excluded: N` when targets were removed;
+- if nothing is left, the answer is `403 data_class_not_eligible`, before anything is sent;
+- if the only eligible model is down, the request fails. It does not fall back to a model
+  that may not hold the data.
+
 ## Failure classification
 
 Every failure is classified first (`app/routing/router.py::classify`):

@@ -48,7 +48,7 @@ eventually takes Prometheus down. Unknown models are labelled `_unknown`.
 
 ## Grafana dashboard
 
-Provisioned at startup. Open http://localhost:3000 → **LLM Gateway**. It's generated as code:
+Provisioned at startup. Open http://localhost:3000 → **AI Gateway**. It's generated as code:
 edit `config/grafana/build_dashboard.py`, run it, and commit both the script and the JSON.
 
 | Row | Panels |
@@ -73,6 +73,22 @@ docker compose --profile screenshots up -d renderer
 curl -u admin:admin -o docs/img/dashboard.png \
   "localhost:3000/render/d/llm-gateway/llm-gateway?orgId=1&from=now-15m&to=now&width=1600&height=1800&kiosk=true&theme=dark"
 ```
+
+## Decisions
+
+Every policy decision, allowed or denied, is recorded three ways
+([Governance](Governance.md#the-decision-log)):
+
+- **A metric:** `gateway_decisions_total{decision, code}`, with codes from a fixed set
+  (`ok`, `data_class_not_eligible`, `role_not_allowed`, `budget`, …). A rising share of
+  denials for one code is usually a policy change or a misconfigured client.
+- **A log line** from the `gateway.audit` logger, with the request id.
+- **A row** in `decision_log`, written in background batches.
+  `gateway_decision_log_dropped_total` counts rows dropped when Postgres can't keep up;
+  the log line is then the record.
+
+`make decisions n=20` prints the latest rows. Admin changes, SCIM writes and spend
+decisions are in `admin_audit` (`GET /admin/audit`).
 
 ## Usage log
 

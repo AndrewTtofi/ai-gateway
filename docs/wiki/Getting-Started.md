@@ -108,7 +108,7 @@ The primary of `chaos-down` always fails:
 - **After about five failures:** the circuit breaker opens. Attempts drop to `1`, because the
   dead primary is skipped.
 
-Open Grafana → **LLM Gateway** to watch it happen. `chaos-blip` is down for 20 s of every
+Open Grafana → **AI Gateway** to watch it happen. `chaos-blip` is down for 20 s of every
 minute, so you can also watch its breaker recover.
 
 ## 5. See the governance layer
