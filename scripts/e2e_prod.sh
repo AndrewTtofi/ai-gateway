@@ -65,14 +65,14 @@ key="$(curl -s -X POST http://127.0.0.1:8081/admin/keys -H "Authorization: Beare
   | python3 -c 'import json,sys; print(json.load(sys.stdin)["key"])')"
 ok "admin: key created"
 auth=(-H "Authorization: Bearer $key" -H 'content-type: application/json')
-chat='{"model":"chaos","messages":[{"role":"user","content":"hi"}]}'
+chat='{"model":"chaos-down","messages":[{"role":"user","content":"hi"}]}'
 r="$(c "${auth[@]}" -d "$chat" -w '\n%{http_code}' $pub/v1/chat/completions)"
 [ "$(tail -1 <<<"$r")" = 200 ] || fail "chat: $(head -c 300 <<<"$r")"
 ok "chat completion through TLS and both hops"
-stream='{"model":"chaos","stream":true,"messages":[{"role":"user","content":"hi"}]}'
+stream='{"model":"chaos-down","stream":true,"messages":[{"role":"user","content":"hi"}]}'
 c -N "${auth[@]}" -d "$stream" $pub/v1/chat/completions | grep -q '^data: \[DONE\]' || fail "stream"
 ok "stream completes"
-msg='{"model":"chaos","max_tokens":50,"messages":[{"role":"user","content":"hi"}]}'
+msg='{"model":"chaos-down","max_tokens":50,"messages":[{"role":"user","content":"hi"}]}'
 c -H "x-api-key: $key" -H 'content-type: application/json' -d "$msg" $pub/v1/messages \
   | grep -q '"type": *"message"' || fail "/v1/messages"
 ok "Anthropic Messages API"
