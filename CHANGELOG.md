@@ -9,6 +9,12 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (GitHub connector, ADR 0031)
+- **`github` connector:** `list_pull_requests` and `get_pull_request` through `POST /v1/tools/github/{tool}`, for the `engineer` role with data up to `internal`.
+- **Short-lived credentials from a GitHub App:** the gateway signs a JWT with the app's private key and exchanges it for a one-hour installation token, requested with only `pull_requests: read` and kept in memory until five minutes before it expires. No GitHub token is stored. `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE`, and optionally `GITHUB_API_URL`.
+- `503 connector_not_configured` when a connector's settings are missing, and `400 invalid_tool_arguments` for arguments a connector rejects before calling out.
+- [Connectors](docs/wiki/Connectors.md): how the credential works, creating the app, failures, rotating the key.
+
 ### Added (eval gate, ADR 0030)
 - **`python -m evals.run_evals --current A --candidate B`** (`make evals`): golden tasks on both models through the gateway's adapters, with the connector tools offered; checks text and tool calls. Exit 1 on a regression against the current model, 2 when the comparison can't be made. `--runs N`, `--offline`, `--json`.
 - **Six golden tasks** (`evals/golden.yaml`), including an indirect prompt injection.

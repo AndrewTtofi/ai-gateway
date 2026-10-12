@@ -5,29 +5,43 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 16, evals for model changes, done (ADR 0030). Phases 13–15 (baseline, governance core, identity) are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-16-evals`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
+- **Phase:** 17, short-lived connector credentials, done (ADR 0031). Phases 13–16 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-17-connectors`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 739 pass and 42 skip without Redis and Postgres; all 781 pass with them (run locally in Docker and in CI); lint clean.
+  - `make test`: 781 pass and 42 skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-  - Verified locally in Docker on 2026-10-12: `scripts/e2e_prod.sh`, `scripts/identity_e2e.sh`, the dev stack with a real local model (Ollama) through the data-class path, and the live eval gate between two local models.
+  - Verified live on 2026-10-12: the `github` connector against a real GitHub App, on the host, inside the dev container (key mounted read-only) and through `POST /v1/tools/github/...` (engineer allowed; another role and `confidential` data refused).
   - The local dev database is at migration 0010.
 - **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 17, short-lived connector credentials (`PLAN.md`): a GitHub App connector. Needs a GitHub App the owner creates.
+  - Phase 18, spend exceptions and hardening (`PLAN.md`): soft and hard caps per principal, the exception queue.
   - A live eval between two hosted models needs provider keys and permission to spend.
 - **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
 - **Open questions:**
   - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
+  - `docker-compose.prod.yml` passes neither the identity settings (OIDC, SCIM) nor the GitHub App's to the gateway yet.
   - The wiki workflow needs the wiki's first page created once in the web UI.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
-  - A key's team only gives it a role if the team is also in `limits.yaml` (`teams:`), and the shipped file has none: service keys can't reach role-limited tools out of the box.
+  - A key's team only gives it a role if the team is also in `limits.yaml` (`teams:`), and the shipped file has none: service keys can't reach role-limited tools out of the box. The live check of the GitHub tool added two teams temporarily.
+  - The GitHub connector uses one installation; several organisations would need one per repository owner.
   - This machine has a stale `ghcr.io` login in Docker, which makes public pulls from ghcr fail; `docker logout ghcr.io` clears it.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 20 (GitHub connector)
+**Did**
+- A GitHub App (read-only pull requests), created through GitHub's manifest flow.
+- The `github` connector: app JWT → one-hour installation token, scoped down and cached in memory; two read-only tools; arguments validated before they reach a URL.
+- Onboarded in the policy for engineers, up to `internal` data. ADR 0031 and a Connectors page with the walkthrough.
+- Checked live against GitHub, in the container, and through the gateway.
+
+**Learned**
+- A GitHub App has three credentials with three lifetimes: the private key (until rotated), the app JWT (minutes, only good for asking for tokens) and the installation token (an hour, the only one that reads data). Only the first is stored.
+- An installation token reads public repositories too. The installation limits private ones.
+- The live call through the gateway returned 502 for a bad repository name. A caller's mistake is a 400; the mocked tests had only checked that an error was raised.
 
 ### 2026-10-12 — Session 19 (local verification, evals)
 **Did**

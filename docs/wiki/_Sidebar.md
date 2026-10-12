@@ -11,6 +11,7 @@
 - [Routing and reliability](Routing-and-Reliability.md)
 - [Identity: OIDC and SCIM](Identity.md)
 - [Governance: policy, data classes, audit](Governance.md)
+- [Connectors](Connectors.md)
 - [Keys, limits and budgets](Keys-Limits-and-Budgets.md)
 - [Observability](Observability.md)
 - [Choosing models and prices](Choosing-Models.md)
