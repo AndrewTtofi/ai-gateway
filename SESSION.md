@@ -8,7 +8,7 @@ Keep "Current state" short and always true.
 - **Phase:** 18, spend exceptions and hardening, done (ADR 0032). Phases 13–17 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
 - **Branch:** `phase-18-spend-exceptions`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 803 pass and 42 skip without Redis and Postgres; all 845 pass with them; lint clean.
+  - `make test`: 798 pass and 47 skip without Redis and Postgres; all 845 pass with them; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
   - Verified live on the dev stack on 2026-10-12: a key spent to its hard cap, asked for an exception, could not approve it itself, a `platform-admin` key approved it, and the next request was served; the decision log and the admin audit log held each step.
   - The local dev database is at migration 0011.
