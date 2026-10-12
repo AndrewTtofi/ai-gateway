@@ -1,4 +1,4 @@
-.PHONY: up down logs test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
+.PHONY: up down logs policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
 
 up:
 	docker compose up -d --build
@@ -20,6 +20,10 @@ test-live:
 
 lint:
 	ruff check app tests tools && mypy app tools
+
+# Validate config/policy.yaml against the rest of the config (ADR 0028).
+policy:
+	python -m app.check_policy
 
 fmt:
 	ruff format app tests tools && ruff check --fix app tests tools

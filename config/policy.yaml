@@ -1,0 +1,66 @@
+# Access policy: who gets what, and which models may see which data (ADR 0028).
+# The single reviewed source for entitlements and data handling. Change it in a pull
+# request: CI validates this file (`python -m app.check_policy`) and runs the tests against it.
+# Applied with `make reload`; a broken file is refused and the previous policy stays live.
+
+# Stamped on every decision record, so an auditor can see which rules were in force.
+# Bump it with every change.
+version: "2026-10-12.1"
+
+# Data classes, least to most sensitive. A request declares its class with the
+# `x-gateway-data-class` header; without it, default_data_class applies.
+data_classes: [public, internal, confidential, restricted]
+default_data_class: internal
+
+# Identity-provider group → role.
+group_roles:
+  eng-backend: engineer
+  eng-platform: engineer
+  trading-desk: trader
+  compliance: compliance
+  everyone: staff
+
+# Role → tier. Someone with several roles gets the highest tier. Tiers (rate limits,
+# budget, allowed aliases) are defined in limits.yaml.
+role_tiers:
+  engineer: standard
+  trader: standard
+  compliance: standard
+  staff: dev
+
+tier_rank: [dev, standard]   # lowest → highest
+
+# Data handling per model. `retention` is what the provider keeps:
+#   none            self-hosted, nothing leaves your infrastructure
+#   zero            zero data retention agreed with the provider
+#   30d (any Nd)    kept that many days
+#   vendor-default  unknown or unbounded
+# `max_data_class` is the most sensitive class the model may receive. A fallback chain is
+# filtered by it per request, so a request never falls back to a model that may not hold
+# its data. A model with no rule gets no data at all.
+#
+# These values are examples. Set them from your contract with each provider.
+models:
+  "anthropic/*": { retention: 30d,            max_data_class: internal }
+  "openai/*":    { retention: 30d,            max_data_class: internal }
+  "mistral/*":   { retention: 30d,            max_data_class: internal }
+  "gemini/*":    { retention: vendor-default, max_data_class: public }
+  "xai/*":       { retention: vendor-default, max_data_class: public }
+  "deepseek/*":  { retention: vendor-default, max_data_class: public }
+  "ollama/*":    { retention: none,           max_data_class: restricted }
+  # One model can differ from its provider, e.g. under a zero-retention agreement:
+  # "anthropic/claude-haiku-4-5-20251001": { retention: zero, max_data_class: confidential }
+  # Test providers (loaded only with GATEWAY_ENABLE_FAKE=1): nothing leaves the machine.
+  "fake/*":      { retention: none,           max_data_class: restricted }
+  "bench/*":     { retention: none,           max_data_class: restricted }
+
+# The response cache and judge sampling copy prompt content somewhere else (a cache
+# store, an embedding model, a judge model). They only run for requests up to this class.
+secondary_use_max_data_class: internal
+
+# Tools. A connector needs an entry here before anyone can call it.
+connectors:
+  mock_records:
+    min_tier: standard
+    max_data_class: restricted
+    allowed_roles: [compliance, trader]

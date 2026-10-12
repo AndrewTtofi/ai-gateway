@@ -45,6 +45,8 @@ jobs:
         with: { python-version: "3.14", cache: pip, cache-dependency-path: requirements-dev.txt }
       - run: pip install --require-hashes -r requirements-dev.txt
       - run: ruff check app tests tools && mypy app tools
+      - name: the access policy is valid for the shipped config
+        run: python -m app.check_policy && GATEWAY_ENABLE_FAKE=1 python -m app.check_policy
       - name: known vulnerabilities in the locked dependencies
         run: pip-audit -r requirements.txt --no-deps --disable-pip --progress-spinner off
       - run: make test
