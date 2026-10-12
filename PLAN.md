@@ -237,9 +237,10 @@ Model calls and real token usage already exist (phases 2 and 4).
 - [x] The eval gate runs in CI.
 
 ### Phase 17 — Short-lived connector credentials (`phase-17-connectors`)
-- [ ] GitHub App auth: sign an app JWT, exchange it for an installation token, cache it
+- [x] GitHub App auth: sign an app JWT, exchange it for an installation token, cache it
       until shortly before it expires. A walkthrough for creating the app (read-only pull requests).
-- [ ] Tests with the HTTP calls mocked.
+- [x] Tests with the HTTP calls mocked.
+- [x] A `github` connector (list and get pull requests), onboarded in the policy (ADR 0031).
 
 ### Phase 18 — Spend exceptions and hardening (`phase-18-spend-exceptions`)
 - [ ] Soft and hard caps per principal, on the existing atomic budget path.

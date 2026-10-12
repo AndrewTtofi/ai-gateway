@@ -118,7 +118,8 @@ connectors:
 
 A connector with no entry here can't be called, even if its code is deployed. Credentials
 are minted per call by the connector, never stored in config. `mock_records` is a stand-in
-for a system of record.
+for a system of record; `github` reads pull requests through a GitHub App. See
+[Connectors](Connectors.md).
 
 ## The decision log
 
