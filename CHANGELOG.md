@@ -9,6 +9,10 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Changed (governance baseline, ADR 0027)
+- **The project is now `ai-gateway`**, continued from llm-gateway's history. Repo links, the package name, the API title and alert text use the new name. Published-image references still name the llm-gateway image until an image is released from this repo.
+- **Plan for v2** (`PLAN.md`, phases 13–19): identity → policy → spend → routing → audit.
+
 ### Added (testing, ADR 0026)
 - **Fuzzing (Hypothesis):** the API never answers 500 to any body, provider data fails cleanly, and accepted requests translate or are refused.
 - **Golden provider fixtures** (Anthropic, OpenAI chat, Responses API; streamed and not) replayed end to end. `tools/record_fixtures.py` swaps them for real recordings.
