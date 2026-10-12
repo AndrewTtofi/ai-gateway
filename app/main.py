@@ -39,6 +39,7 @@ from app import (
     judge,
     messages_api,
     providers,
+    scim,
     services,
 )
 from app.access import DATA_CLASS_HEADER, Principal, principal_for_key
@@ -272,6 +273,12 @@ async def _no_receive() -> dict[str, Any]:
 
 app.add_middleware(BodyLimit)  # inside RequestContext: rejections still get a request id
 app.add_middleware(RequestContext)
+app.include_router(scim.router)  # the identity provider provisions users and groups here
+
+
+@app.exception_handler(scim.ScimError)
+async def scim_error(_: Request, exc: scim.ScimError) -> JSONResponse:
+    return scim.error(exc.status, exc.detail, exc.scim_type)
 
 
 @app.get("/metrics", include_in_schema=False)

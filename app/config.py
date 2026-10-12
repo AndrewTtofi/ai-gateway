@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     cache_redis_url: str = ""
     database_url: str = "postgresql+asyncpg://gateway:gateway@localhost:5432/gateway"
     gateway_admin_key: str = ""
+    # The bearer token the identity provider presents to /scim/v2 (ADR 0029). Empty: SCIM
+    # is off. Generate with `openssl rand -hex 32`.
+    scim_token: str = ""
     # More operators, one key each: lines of `name sha256-hex-of-key` (ADR 0025).
     admin_keys_file: str = ""
     log_level: str = "INFO"
