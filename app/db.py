@@ -73,6 +73,30 @@ class AdminAuditRow(Base):
     detail: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 
+class DecisionRow(Base):
+    """One governance decision, allow or deny (ADR 0028). Never holds content."""
+
+    __tablename__ = "decision_log"
+    __table_args__ = (Index("ix_decision_log_subject_at", "subject", "at"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    request_id: Mapped[str] = mapped_column(String(64), index=True)  # joins usage_log
+    subject: Mapped[str] = mapped_column(String(100))  # "key:<id>", later "user:<id>"
+    subject_kind: Mapped[str] = mapped_column(String(16))
+    subject_name: Mapped[str] = mapped_column(String(100))
+    roles: Mapped[list[str]] = mapped_column(JSON)
+    tier: Mapped[str] = mapped_column(String(50))
+    team: Mapped[str | None] = mapped_column(String(100))
+    action: Mapped[str] = mapped_column(String(200))
+    data_class: Mapped[str] = mapped_column(String(64))
+    decision: Mapped[str] = mapped_column(String(8))  # allow | deny
+    code: Mapped[str] = mapped_column(String(64))
+    reason: Mapped[str] = mapped_column(String(300))
+    policy_version: Mapped[str] = mapped_column(String(32))
+    detail: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
 class UsageRow(Base):
     """One row per admitted request (ADR 0008). Never holds prompt or completion text."""
 
