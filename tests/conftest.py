@@ -8,6 +8,7 @@ from app.access import AccessPolicy
 from app.auth import ApiKey, CachedKeys, MemoryKeyStore, generate_key, hash_key
 from app.config import Registry
 from app.decisions import MemoryDecisionSink
+from app.directory import CachedIdentities, MemoryDirectory
 from app.observability.usage import MemoryUsageSink
 from app.providers import AdapterPool
 from app.ratelimit import Concurrency, MemoryLimiter, MemorySpend
@@ -67,6 +68,9 @@ def api_key(monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setattr(services, "usage", MemoryUsageSink())
     monkeypatch.setattr(services, "concurrency", Concurrency())
     monkeypatch.setattr(services, "decisions", MemoryDecisionSink())
+    directory = MemoryDirectory()
+    monkeypatch.setattr(services, "directory", directory)
+    monkeypatch.setattr(services, "identities", CachedIdentities(directory))
     monkeypatch.setattr(config, "access", OPEN_POLICY)
     return add_key("chaos", **UNLIMITED)  # the chaos tier has no concurrency limit
 

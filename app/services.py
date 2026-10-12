@@ -21,6 +21,7 @@ from app.auth import CachedKeys, MemoryKeyStore, PostgresKeyStore
 from app.cache import CacheStore, MemoryCacheStore, RedisCacheStore
 from app.db import make_engine, make_sessions
 from app.decisions import DecisionSink, MemoryDecisionSink, PostgresDecisionWriter
+from app.directory import CachedIdentities, Directory, MemoryDirectory, PostgresDirectory
 from app.judge import Judge, MemoryScoreStore, PostgresScoreStore
 from app.observability.usage import MemoryUsageSink, PostgresUsageWriter, UsageSink
 from app.ratelimit import (
@@ -44,6 +45,8 @@ response_cache: CacheStore = MemoryCacheStore()  # ADR 0018
 judge: Judge = Judge(MemoryScoreStore())  # ADR 0022
 audit: AuditStore = MemoryAuditStore()  # admin changes (ADR 0025)
 decisions: DecisionSink = MemoryDecisionSink()  # governance decisions (ADR 0028)
+directory: Directory = MemoryDirectory()  # users and groups from the IdP (ADR 0029)
+identities: CachedIdentities = CachedIdentities(directory)
 alerts: Any = None  # app.routing.selfheal.Alerts, set at startup (breaker and budget alerts)
 _writer: PostgresUsageWriter | None = None
 _decision_writer: PostgresDecisionWriter | None = None
@@ -57,7 +60,7 @@ _engine: AsyncEngine | None = None
 
 async def start() -> None:
     global keys, limiter, spend, usage, response_cache, judge, _redis, _engine, _writer, started
-    global _cache_redis, audit, decisions, _decision_writer
+    global _cache_redis, audit, decisions, _decision_writer, directory, identities
     if config.settings.gateway_stores == "memory":
         router.store = MemoryBreakerStore()
         judge.start()
@@ -84,6 +87,8 @@ async def start() -> None:
     response_cache = RedisCacheStore(_cache_redis or _redis)
     judge = Judge(PostgresScoreStore(sessions))
     audit = PostgresAuditStore(sessions)
+    directory = PostgresDirectory(sessions)
+    identities = CachedIdentities(directory)
     judge.start()
     spend = RedisSpend(_redis)
     router.store = (
@@ -128,8 +133,9 @@ KEYS_CHANNEL = "gateway:keys-changed"
 
 
 async def announce_key_change() -> None:
-    """Tell every replica to drop its cached keys now (revoked or edited), instead of
-    within the cache's 30 s (ADR 0023). Best effort: the TTL still bounds it."""
+    """Tell every replica to drop its cached keys and identities now (a key revoked or
+    edited, a user or group changed over SCIM), instead of within the caches' 30 s
+    (ADR 0023, 0029). Best effort: the TTL still bounds it."""
     if _redis is None:
         return
     try:
@@ -162,6 +168,7 @@ async def watch_key_changes() -> None:
                     # own reconnects: changes may have been missed, so drop the cache too.
                     if message and message.get("type") in ("message", "subscribe"):
                         keys.invalidate()
+                        identities.invalidate()
         except asyncio.CancelledError:
             raise
         except Exception as exc:

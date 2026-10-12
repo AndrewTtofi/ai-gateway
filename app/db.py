@@ -12,6 +12,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -71,6 +72,42 @@ class AdminAuditRow(Base):
     action: Mapped[str] = mapped_column(String(32))
     target: Mapped[str | None] = mapped_column(String(100))
     detail: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+class DirectoryUserRow(Base):
+    """A user provisioned by the identity provider over SCIM (ADR 0029)."""
+
+    __tablename__ = "directory_users"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_name: Mapped[str] = mapped_column(String(320), unique=True)
+    external_id: Mapped[str | None] = mapped_column(String(255), index=True)  # the IdP's id
+    active: Mapped[bool] = mapped_column(Boolean)
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    email: Mapped[str | None] = mapped_column(String(320))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DirectoryGroupRow(Base):
+    __tablename__ = "directory_groups"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    display_name: Mapped[str] = mapped_column(String(255), unique=True)  # what policy maps
+    external_id: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class DirectoryMemberRow(Base):
+    __tablename__ = "directory_members"
+
+    group_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("directory_groups.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("directory_users.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
 
 
 class DecisionRow(Base):
