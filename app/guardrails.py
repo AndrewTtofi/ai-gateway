@@ -103,9 +103,12 @@ def _texts(messages: list[Any], tools: Any = None) -> list[tuple[str, str]]:
         role, content = msg.get("role"), msg.get("content")
         if isinstance(content, list):
             content = " ".join(
-                p.get("text", "")
+                p["text"]
                 for p in content
-                if isinstance(p, dict) and p.get("type") == "text"
+                # `text` can be null or missing in what a client sends: nothing to scan
+                if isinstance(p, dict)
+                and p.get("type") == "text"
+                and isinstance(p.get("text"), str)
             )
         if isinstance(content, str) and content:
             out.append((str(role), content))
