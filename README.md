@@ -1,24 +1,296 @@
 # AI Gateway
 
-> **Status: v2 in progress.** This repo continues [llm-gateway](https://github.com/AndrewTtofi/llm-gateway)
-> and adds a governance layer for an enterprise AI platform, so that every request passes
-> identity → policy → spend → routing → audit. Built so far: the routing gateway described
-> below, [identity](docs/wiki/Identity.md) (OIDC tokens, users and groups provisioned over
-> SCIM, a bundled identity provider for the dev stack), and the
-> [policy and audit steps](docs/wiki/Governance.md) (data classes that filter the fallback
-> chain, tools behind the policy, a decision log), and an
-> [eval gate for model changes](docs/wiki/Model-Evals.md). Spend exceptions are next. The phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
-> and [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) explains the design.
+**A governed gateway for an enterprise AI platform.** Every request, from a person or a
+service, to a model or a tool, passes the same five stages:
+**identity → policy → spend → routing → audit.**
 
-A self-hosted gateway that sits between your applications and LLM providers. Apps talk to
-**one endpoint**, the gateway picks the provider, falls back when one fails, enforces
-per-key rate limits and budgets, and records what every request cost.
+## The problem
 
-**The request formats are a compatibility detail, not the product.**
-Clients use the OpenAI chat-completions format (`/v1/chat/completions`) or the **Anthropic
-Messages API** (`/v1/messages`, for the Anthropic SDKs and Claude Code). Internally every
-request is converted to one format, which is what lets a request that started on Claude fall
-back to another provider. Behind the gateway, requests can go to:
+When a company adopts AI, each team wires up its own access: an API key in a config file,
+a model picked by whoever set it up, a tool that can read another system. That works
+until someone asks the questions a regulated business has to answer:
+
+- **Who can use this, and did the person who left last month lose access?**
+- **Did confidential data go to a provider that keeps it for thirty days?**
+- **Who spent $4,000, and who agreed to it?**
+- **What can the assistant reach in our other systems, and with whose credentials?**
+- **We changed the model on Tuesday. Does everything that depended on it still work?**
+- **Can you show me, for March?**
+
+None of these can be answered from inside one application. They need one place that every
+request goes through, owned by the platform team. This is that place.
+
+| Stage | What the gateway does |
+|-------|-----------------------|
+| **Identity** | People sign in through the company's identity provider (OIDC). Users and groups are provisioned over SCIM, so joiners, movers and leavers are handled where they already are. Services use gateway API keys. |
+| **Policy** | A reviewed YAML file maps group → role → tier and says which model may hold which class of data, and which role may call which tool. Fail closed: no rule, no access. |
+| **Spend** | Rate limits per caller, a soft cap that warns, a hard cap that refuses, and an exception queue where a second person approves more for the month. |
+| **Routing** | An alias maps to a fallback chain of models. The chain is filtered to the models allowed to hold the request's data **before** routing, then retries, fallback and circuit breakers work inside what is left. |
+| **Audit** | Every decision, allowed or denied, is recorded with who, what, why and the policy version. Never the content. |
+
+Two more pieces keep it honest over time: **connectors** reach other systems with
+credentials that live an hour, and an **eval gate** compares a candidate model with the
+one it would replace before the switch.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    U["People<br/>(OIDC token)"] --> ID
+    S["Services<br/>(gateway API key)"] --> ID
+    IDP["Identity provider"] -.->|"SCIM: users, groups"| PG
+
+    subgraph GW["Gateway (FastAPI, N stateless replicas)"]
+        ID["1 Identity"] --> PO["2 Policy<br/>role · tier · data class"]
+        PO --> SP["3 Spend<br/>limits · soft and hard caps"]
+        SP --> RO["4 Routing<br/>eligible chain · retries · breakers"]
+        RO --> AU["5 Audit<br/>decision + usage"]
+    end
+
+    RO --> M["Models<br/>Anthropic · OpenAI · others · local"]
+    PO --> T["Tools<br/>GitHub · systems of record"]
+
+    PG[("Postgres<br/>directory · keys · decisions<br/>usage · exceptions")] -.-> ID
+    AU -.-> PG
+    SP -.-> RD[("Redis<br/>buckets · spend · breakers")]
+    CFG["config/*.yaml<br/>policy · limits · models"] -.->|"reviewed, hot-reloaded"| PO
+    GW -.-> PR["Prometheus → Grafana"]
+```
+
+[docs/architecture.md](docs/architecture.md) walks through each stage, where the groups
+come from, what happens when a store is down, and the trust boundaries.
+
+## Quickstart
+
+You need Docker with Compose. No accounts and no provider keys are needed to try it.
+[Ollama](https://ollama.com) is optional and gives you a free local model.
+
+```bash
+git clone https://github.com/AndrewTtofi/ai-gateway.git && cd ai-gateway
+cp .env.example .env            # set GATEWAY_ADMIN_KEY (openssl rand -hex 32); provider keys are optional
+ollama pull llama3.2:3b         # optional: a local model, and the only one confidential data may reach
+make up                         # gateway, Redis, Postgres, Prometheus, Grafana
+make key name=me tier=standard team=eng-backend   # prints a gw_… key once
+export GW_KEY=gw_...
+```
+
+```bash
+curl localhost:8000/v1/chat/completions -H "Authorization: Bearer $GW_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"model":"fast","messages":[{"role":"user","content":"Say hi in five words"}]}'
+```
+
+| Service | URL |
+|---------|-----|
+| Gateway (API docs at `/docs`) | http://localhost:8000 |
+| Grafana (admin / admin) | http://localhost:3000 |
+| Prometheus | http://localhost:9090 |
+| Identity provider, with `make idp` | http://localhost:9000 |
+
+The dev stack binds every port to `127.0.0.1`.
+
+## The 60-second demo
+
+Four keys, four stages. [docs/demo.md](docs/demo.md) has every command with its output.
+
+```bash
+newkey() { make -s key "$@" | sed -E 's/.*"key": ?"([^"]+)".*/\1/'; }
+CASE_BOT=$(newkey name=case-bot tier=standard team=compliance)
+BUILD_BOT=$(newkey name=build-bot tier=standard team=eng-backend)
+BATCH=$(newkey name=batch-job tier=chaos budget=0.03)
+ONCALL=$(newkey name=platform-oncall tier=standard team=platform-admin)
+call() { curl -s -w '  → %{http_code}\n' -H 'content-type: application/json' "$@"; }
+```
+
+**Policy.** The same tool, two roles: compliance may look up a case, engineering may not.
+
+```bash
+call localhost:8000/v1/tools/mock_records/lookup_case -H "Authorization: Bearer $CASE_BOT" -d '{"args":{"case_id":"C-1001"}}'
+# {"connector":"mock_records","tool":"lookup_case","result":{"status":"open","owner":"compliance"}}  → 200
+call localhost:8000/v1/tools/mock_records/lookup_case -H "Authorization: Bearer $BUILD_BOT" -d '{"args":{"case_id":"C-1001"}}'
+# {"error":{…"code":"role_not_allowed"}}  → 403
+```
+
+**Data handling.** Confidential data is refused by an alias whose models all keep data.
+
+```bash
+call localhost:8000/v1/chat/completions -H "Authorization: Bearer $BUILD_BOT" -H 'x-gateway-data-class: confidential' \
+  -d '{"model":"smart","messages":[{"role":"user","content":"Summarise this contract"}]}'
+# {"error":{"message":"No model behind 'smart' is eligible for 'confidential' data.",…}}  → 403
+```
+
+With Ollama running, the same request to `fast` is answered by the local model, with the
+two hosted models removed from the chain (`x-gateway-excluded: 2`).
+
+**Spend.** A hard cap, then an exception that someone else has to approve.
+
+```bash
+for i in $(seq 1 12); do call -o /dev/null localhost:8000/v1/chat/completions -H "Authorization: Bearer $BATCH" \
+  -d '{"model":"fake/metered","messages":[{"role":"user","content":"hello"}]}'; done | tr -d '\n→ '; echo
+# 200200200200200200200200429429429429
+EXC=$(call localhost:8000/v1/spend/exceptions -H "Authorization: Bearer $BATCH" \
+  -d '{"amount_usd":1,"reason":"month-end batch"}' | sed -E 's/.*"id":"([^"]+)".*/\1/')
+call -X POST localhost:8000/v1/spend/exceptions/$EXC/approve -H "Authorization: Bearer $BATCH"    # 403 not_an_approver
+call -X POST localhost:8000/v1/spend/exceptions/$EXC/approve -H "Authorization: Bearer $ONCALL"   # 200 approved
+```
+
+**Audit.** Every step above, allowed or denied.
+
+```bash
+make decisions n=6
+# 19:55:44 allow ok                 model:fake/metered            batch-job        internal
+# 19:55:44 allow ok                 spend_exception:approve       platform-oncall  none
+# 19:55:44 deny  not_an_approver    spend_exception:approve       batch-job        none
+# 19:55:44 allow ok                 spend_exception:request       batch-job        none
+# 19:55:44 deny  budget             model:fake/metered            batch-job        internal
+```
+
+**Identity**, with a real identity provider in the stack: `make idp-e2e` plays a joiner, a
+mover and a leaver against authentik and checks the audit trail (about two minutes).
+
+## What's real vs. mocked
+
+| Part | Status |
+|------|--------|
+| **OIDC tokens** | **Real.** Signature, issuer, audience and expiry verified against the provider's published keys. Run end to end against authentik in CI on every pull request. |
+| **SCIM provisioning** | **Real** SCIM 2.0 server, driven by authentik in CI. The request forms Okta and Entra send are covered by unit tests written from their documentation, not by a live tenant. |
+| **Identity provider** | authentik, in the compose stack, instead of a hosted tenant: no account, no tunnel, testable in CI. The gateway is provider-neutral. |
+| **Policy, data classes, decision log** | **Real**, enforced on every request and stored in Postgres. |
+| **The data-handling rules in `config/policy.yaml`** | **Examples.** Retention terms come from your contract with each provider. |
+| **Spend caps and the exception queue** | **Real.** Atomic in Redis; tested with concurrent requests and concurrent approvers. Budget amounts in `config/limits.yaml` are examples. |
+| **Model calls** | **Real** adapters. Anthropic and Ollama have been run live; OpenAI, Gemini, xAI, Mistral and DeepSeek are covered by tests against recorded and mocked responses only. |
+| **GitHub connector** | **Real.** A GitHub App, a signed JWT, a one-hour installation token; run against GitHub. Unit tests mock GitHub's HTTP. |
+| **`mock_records` connector** | **Mocked.** A stand-in for a system of record, with one case in it, so the policy path can be shown without another system. |
+| **`fake` provider and the `chaos` tier** | **Mocked**, dev stack only. Scripted failures and a priced test model for demos and load tests. Never loaded in production. |
+| **Eval gate** | **Real** harness and golden tasks. Run live between two local models; not yet between hosted models. CI runs it against a deterministic stub. |
+| **Benchmark numbers** | Measured on one laptop against a mock provider that replays real timing ([RESULTS.md](docs/RESULTS.md)). |
+
+Known gaps, on purpose or not yet done:
+
+- **The data class is declared by the caller**, not detected from content.
+- **No UI.** Operators use `make` targets and the API; Grafana shows usage.
+- **Approvers aren't notified** of a pending spend exception; they list the queue.
+- **Decision records are never deleted automatically.** Usage rows have a retention job; decisions don't yet.
+- **Tools act as the gateway's app**, not as the person asking.
+
+## Design decisions and trade-offs
+
+The ones worth arguing about. Each has a decision record in [docs/decisions/](docs/decisions/).
+
+**Groups come from SCIM, not from token claims.** A token is a snapshot: put groups in it
+and someone removed from a group keeps their access until it expires. The gateway uses the
+token only to prove who is calling, and reads groups from a directory the identity
+provider keeps current. *Trade-off:* a SCIM server to run, and a directory lookup per
+request (cached for 30 seconds, invalidated on every provisioning write).
+[ADR 0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md)
+
+**Policy is a YAML file, not a database or a policy engine.** Access changes are pull
+requests: reviewed, diffable, validated in CI against the rest of the config, and each
+decision is stamped with the policy version. *Trade-off:* a change needs a merge and a
+reload, not a click, and there is no per-request rule language. For a few roles and tiers
+that is the right size; many teams writing their own rules would justify OPA or Cedar.
+[ADR 0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md)
+
+**Data classes filter the fallback chain inside the router.** Checking the first model
+isn't enough: a fallback exists to send the request somewhere else. So ineligible models
+are removed before routing, and the cache and judge follow the same ceiling.
+*Trade-off:* the class is declared, not detected. Enforcement is exact; classification is
+the caller's job. [ADR 0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md)
+
+**Postgres and Redis, not SQLite.** A single file would make the quickstart smaller. But
+budgets are a check-then-write that has to be atomic across replicas (a Lua script in
+Redis), and the directory, the decision log and the exception queue are shared by every
+replica. *Trade-off:* two services to run; in production I'd use managed ones.
+[ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md)
+
+**The hard cap stays hard; the way past it is a second person.** An approved exception
+raises one caller's budget for one month, so nothing has to be undone. Grants are looked
+up only after a request is refused, so everyone under budget pays nothing for the
+feature. *Trade-off:* an approval takes up to ten seconds to reach other replicas.
+[ADR 0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md)
+
+**Connectors hold a key, not a token.** A GitHub App's private key is traded for a
+one-hour token asked for with less permission than the app has. *Trade-off:* calls are
+made as the app, so every entitled caller sees the same repositories; acting as the
+individual needs OAuth on their behalf. [ADR 0031](docs/decisions/0031-github-app-credentials-for-connectors.md)
+
+**The eval gate measures regression, not a score.** A candidate fails when it loses a task
+the current model passes. A task both fail is information, not a blocker. *Trade-off:* it
+says nothing about absolute quality, and live runs cost money, so CI only checks the
+harness. [ADR 0030](docs/decisions/0030-eval-gate-for-model-changes.md)
+
+**A bundled identity provider instead of a hosted one.** authentik runs in the compose
+stack, so the whole identity flow is tested in CI with no account or tunnel.
+*Trade-off:* Okta's and Entra's behaviour is covered from their documentation, not a tenant.
+[ADR 0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md)
+
+**One gateway, built on a routing gateway that already worked.** Governance can't be
+bolted on from outside: eligibility has to be applied where fallback happens.
+*Trade-off:* a larger repository than a governance-only project.
+[ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md)
+
+**The audit log never holds content.** Who, what, when, why and under which policy; never
+prompts, answers or tool arguments. *Trade-off:* it can prove a case was looked up and by
+whom, not which case. That belongs in the system of record's own log.
+
+<details>
+<summary>All decision records</summary>
+
+| ADR | Decision |
+|-----|----------|
+| [0001](docs/decisions/0001-config-driven-models.md) | All models are defined in config, not code |
+| [0002](docs/decisions/0002-streaming-errors-and-disconnects.md) | Streaming error semantics and client disconnects |
+| [0003](docs/decisions/0003-anthropic-adapter.md) | Anthropic adapter: official SDK, capabilities as config |
+| [0004](docs/decisions/0004-retries-fallback-circuit-breaker.md) | Retries, fallback chains and circuit breakers |
+| [0005](docs/decisions/0005-mid-stream-failure-policy.md) | No fallback after the first token |
+| [0006](docs/decisions/0006-api-keys.md) | Gateway API keys: hashed, cached, stale-if-error |
+| [0007](docs/decisions/0007-rate-limits-and-budgets.md) | Token-aware rate limits and budgets: estimate, then reconcile |
+| [0008](docs/decisions/0008-observability.md) | Usage log, metrics with bounded labels, logs without prompts |
+| [0009](docs/decisions/0009-benchmarking.md) | How the gateway is benchmarked |
+| [0010](docs/decisions/0010-anthropic-messages-inbound.md) | Inbound Anthropic Messages API, translated at the edge |
+| [0011](docs/decisions/0011-model-catalog-and-pricing-sync.md) | Model catalog, and price sync with review |
+| [0012](docs/decisions/0012-openai-compatible-provider-rules.md) | Per-provider parameter rules for OpenAI-compatible APIs, and the `frontier` alias |
+| [0013](docs/decisions/0013-lossless-anthropic-features.md) | Prompt caching and extended thinking through `/v1/messages` |
+| [0014](docs/decisions/0014-openai-responses-api.md) | OpenAI Responses API adapter |
+| [0015](docs/decisions/0015-cost-accuracy.md) | Long-context tiers, cache-write prices and off-peak pricing |
+| [0016](docs/decisions/0016-teams-key-edits-production.md) | Teams, key edits, body limits and production packaging |
+| [0017](docs/decisions/0017-policy-routing.md) | Policy routing (`model: auto`) |
+| [0018](docs/decisions/0018-response-cache.md) | Response cache, exact and semantic |
+| [0019](docs/decisions/0019-self-healing-alerts.md) | Self-healing: background probes, quarantine, alerts |
+| [0020](docs/decisions/0020-ab-routing.md) | A/B routing with weighted, sticky variants |
+| [0021](docs/decisions/0021-prompt-injection-filter.md) | Prompt-injection filter |
+| [0022](docs/decisions/0022-llm-as-judge.md) | LLM-as-judge sampling |
+| [0023](docs/decisions/0023-security-hardening.md) | Security hardening after the audit: billing, shared breakers, bounded requests |
+| [0024](docs/decisions/0024-operational-readiness.md) | Operational readiness: alert routing, runbooks, backups, budget alerts |
+| [0025](docs/decisions/0025-security-finish.md) | Pre-deploy security: image and dependency scanning, operator keys, audit log, networks |
+| [0026](docs/decisions/0026-test-depth.md) | Test depth: fuzzing, golden provider fixtures, end-to-end production stack in CI |
+| [0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) | One gateway: a governance layer on the routing gateway |
+| [0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md) | Access policy, data classes on the fallback chain, and the decision log |
+| [0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md) | Identity: OIDC tokens, and groups from a SCIM-provisioned directory |
+| [0030](docs/decisions/0030-eval-gate-for-model-changes.md) | An eval gate for model changes: golden tasks, regression against the current model |
+| [0031](docs/decisions/0031-github-app-credentials-for-connectors.md) | Short-lived connector credentials: a GitHub App |
+| [0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md) | Soft caps and a spend exception queue |
+
+</details>
+
+## Documentation
+
+| | |
+|---|---|
+| [docs/demo.md](docs/demo.md) | The demo, command by command |
+| [docs/architecture.md](docs/architecture.md) | The five stages, state, trust boundaries |
+| [docs/runbook.md](docs/runbook.md) | Operating it: access, policy changes, spend, connectors, secrets, audit evidence |
+| [docs/enablement/](docs/enablement/README.md) | One capability explained for compliance, for the people using it, and for engineers |
+| [docs/wiki/](docs/wiki/Home.md) | Every part in depth: [identity](docs/wiki/Identity.md), [governance](docs/wiki/Governance.md), [connectors](docs/wiki/Connectors.md), [limits and budgets](docs/wiki/Keys-Limits-and-Budgets.md), [model evals](docs/wiki/Model-Evals.md), routing, operations, security |
+
+## The routing layer
+
+Stage four is a full model gateway, built first as
+[llm-gateway](https://github.com/AndrewTtofi/llm-gateway). Apps talk to one endpoint and
+ask for an alias; the gateway picks the provider, falls back when one fails, and records
+what the request cost. Clients use the OpenAI chat-completions format or the Anthropic
+Messages API. The formats are a compatibility detail: internally every request is one
+format, which is what lets a request that started on one provider fall back to another.
 
 | Provider | How |
 |----------|-----|
@@ -30,6 +302,7 @@ back to another provider. Behind the gateway, requests can go to:
 
 OpenAI, Gemini, xAI, Mistral and DeepSeek are covered by mocked tests but haven't been run
 against their live APIs yet. A provider without an API key is skipped.
+
 
 ```python
 from openai import OpenAI   # any OpenAI SDK (or LangChain, LlamaIndex, curl, …)
@@ -46,20 +319,11 @@ for chunk in resp:
 
 The client never learns which provider answered unless it reads the `x-gateway-provider` header.
 
+
 ![Grafana dashboard: request rate, fallback rate, p95 latency, time to first token, circuit breakers, spend per key](docs/img/dashboard.png)
 
 <sub>Local demo traffic. The spend figures come from a fake provider priced high on purpose to exercise budgets; they are not real spend.</sub>
 
-## Why
-
-When several apps call LLMs directly, each app repeats the same work and the same failures:
-
-- one provider SDK per app;
-- an outage at one provider is an outage for your users;
-- no one can say which team spent $4,000 last month;
-- a runaway batch job can burn the whole budget.
-
-The gateway moves all of that into one place that the platform team owns:
 
 | | |
 |---|---|
@@ -75,96 +339,6 @@ The gateway moves all of that into one place that the platform team owns:
 | **Choosing models** | `GET /v1/catalog` gives apps price, capabilities, a quality score and live latency, TTFT and error rate for every model they may use, so they can pick the cheapest or best fit ([guide](docs/wiki/Choosing-Models.md)). |
 | **Observability** | Prometheus metrics (never labelled by key), a Grafana dashboard provisioned as code, SLO burn-rate alerts, and JSON logs with a request id. Prompt content is never logged. |
 
-## Documentation
-
-The **[wiki](docs/wiki/Home.md)** explains every part in depth:
-
-- architecture and the life of a request;
-- provider translation;
-- routing and circuit breakers;
-- keys, limits and budgets;
-- smart routing, the response cache, guardrails and the judge, self-healing;
-- observability, configuration, the API, operations, production deployment and security;
-- [a multi-app walkthrough](docs/wiki/Use-Case-Multi-App.md);
-- [subscriptions and provider terms](docs/wiki/Subscriptions-and-Terms.md).
-
-What's next is in the **[roadmap](docs/wiki/Roadmap.md)**.
-
-## Use cases
-
-| Situation | What the gateway does |
-|-----------|-----------------------|
-| **A product feature depends on one LLM provider.** When the provider has an outage or returns 429/529 "overloaded", the feature goes down. | The `smart` / `fast` chains fail over to a second provider, or a local model, before the first token. Users see a slightly different model, not an error. |
-| **Several teams share an Anthropic/OpenAI account.** Nobody knows who spent what, and one runaway job can drain the month's budget. | One key per team or service, with its own tokens/min and monthly USD budget. The dashboard and `usage_log` show exact spend per key. A key that hits its budget gets `429 insufficient_quota` instead of a surprise invoice. |
-| **A support chatbot or other customer-facing assistant.** Latency and availability matter more than which model answers. | Streaming with time-to-first-token SLOs and burn-rate alerts. Circuit breakers stop sending traffic to a degraded provider within seconds. |
-| **Overnight batch jobs** (summarising tickets, tagging documents, evaluations) compete with interactive traffic for the same provider rate limits. | Give the batch key a low tokens/min and its own budget so it can't starve the chatbot. Route it to a cheaper alias such as `fast`. |
-| **Moving to a new model**, or comparing a cheaper one. | Change the alias chain in `config/models.yaml` and run `make reload`. Every app moves at once, with no deploys. Per-target latency, error and cost panels show whether the new model is better. |
-| **Sensitive or offline workloads, or a dev laptop with no API budget.** | The `local` alias routes to Ollama on your own hardware, so prompts never leave the machine. Ollama also serves as the last fallback in the `fast` and `balanced` chains. |
-| **Internal tools built on LangChain, LlamaIndex, the OpenAI SDK or the Anthropic SDK.** | Point `base_url` at the gateway and use a gateway key. Provider API keys stay in one place and never reach app config or laptops. |
-| **Developers using Claude Code** on company API keys. |  Point `ANTHROPIC_BASE_URL` at the gateway. Each developer or team gets a key with its own budget, and usage shows up on the same dashboard as everything else. |
-| **Security and compliance want an audit trail.** | Every request has a usage row (key, model, tokens, cost, latency, status) and a request id that correlates with logs. Prompt content is never stored. |
-
-## Architecture
-
-```mermaid
-flowchart LR
-    C["Apps<br/>(OpenAI SDK, curl, LangChain…)"] -->|"POST /v1/chat/completions<br/>Bearer gw_…"| A
-
-    subgraph GW["Gateway (FastAPI, async; N replicas)"]
-        A["Auth<br/>hashed keys, cached"] --> L["Rate limit + budget<br/>token buckets"]
-        L --> R["Router<br/>alias → fallback chain<br/>retries · circuit breaker"]
-        R --> P["Provider adapters<br/>translate in/out"]
-    end
-
-    P --> AN["Anthropic"]
-    P --> OA["OpenAI"]
-    P --> OL["Ollama / any<br/>OpenAI-compatible"]
-
-    A -.-> PG[("Postgres<br/>keys · usage log")]
-    L -.-> RD[("Redis<br/>buckets · breakers")]
-    R -.-> RD
-    GW -.->|"usage rows (batched)"| PG
-    GW -.->|":9100/metrics"| PR["Prometheus<br/>+ SLO alerts"] --> GF["Grafana"]
-    CFG["config/*.yaml<br/>models · pricing · limits"] -.->|"hot reload"| R
-```
-
-Request path: authenticate → reserve rate-limit tokens and budget → resolve the alias →
-try each target in the chain (skipping any whose breaker is open) → stream the answer →
-reconcile actual tokens and cost → write a usage row in the background.
-
-If Redis or Postgres fails, the gateway degrades instead of going down:
-
-- **Redis down:** rate limits and breakers fail open. Budgets use the last known spend, and spend is queued until Redis is back.
-- **Postgres down:** recently used keys are served from cache, keys not in the cache get `503`, and usage rows are dropped and counted.
-
-Chat traffic keeps flowing in both cases. [RESULTS.md](docs/RESULTS.md) has the chaos tests.
-
-## Quickstart
-
-You need Docker with Compose. [Ollama](https://ollama.com) is optional and gives you a free local model.
-
-```bash
-git clone https://github.com/AndrewTtofi/ai-gateway.git && cd ai-gateway
-cp .env.example .env            # add ANTHROPIC_API_KEY / OPENAI_API_KEY and an admin key
-ollama pull llama3.2:3b         # optional: local model, also the last fallback
-make up                         # gateway, Redis, Postgres, Prometheus, Grafana
-make key name=me tier=dev       # prints a gw_… key once; store it
-export GW_KEY=gw_...
-```
-
-```bash
-curl localhost:8000/v1/chat/completions -H "Authorization: Bearer $GW_KEY" \
-  -H 'content-type: application/json' \
-  -d '{"model":"fast","messages":[{"role":"user","content":"Say hi in five words"}]}'
-```
-
-| Service | URL |
-|---------|-----|
-| Gateway (API docs at `/docs`) | http://localhost:8000 |
-| Grafana (admin / admin) | http://localhost:3000 |
-| Prometheus | http://localhost:9090 |
-
-The dev stack binds every port to `127.0.0.1`.
 
 ### Watch it fail over (no API keys needed)
 
@@ -190,6 +364,7 @@ also check breaker state directly:
 ```bash
 curl localhost:8000/admin/providers -H "Authorization: Bearer $GATEWAY_ADMIN_KEY"
 ```
+
 
 ## Using it
 
@@ -378,7 +553,7 @@ python tests/load/report.py
 ## Deploying
 
 The gateway is a stateless container. Release images for amd64 and arm64 are published to
-`ghcr.io/andrewttofi/llm-gateway` on every `v*` tag, with an SBOM and signed provenance.
+`ghcr.io/andrewttofi/ai-gateway` on every `v*` tag, with an SBOM and signed provenance.
 
 **On one host:** `docker-compose.prod.yml` runs the whole stack:
 - Caddy with automatic TLS, with operator endpoints kept off the public site;
@@ -427,43 +602,6 @@ gateway, not to a subscription.
 images and streaming), plus `/v1/models` and `/v1/catalog`. Behind the scenes the gateway
 uses OpenAI's Responses API where a model requires it, and embedding models for the
 semantic cache. There are no public embeddings, image-generation or audio endpoints.
-
-## Design decisions
-
-Each non-obvious choice has an ADR in [docs/decisions/](docs/decisions/):
-
-| ADR | Decision |
-|-----|----------|
-| [0001](docs/decisions/0001-config-driven-models.md) | All models are defined in config, not code |
-| [0002](docs/decisions/0002-streaming-errors-and-disconnects.md) | Streaming error semantics and client disconnects |
-| [0003](docs/decisions/0003-anthropic-adapter.md) | Anthropic adapter: official SDK, capabilities as config |
-| [0004](docs/decisions/0004-retries-fallback-circuit-breaker.md) | Retries, fallback chains and circuit breakers |
-| [0005](docs/decisions/0005-mid-stream-failure-policy.md) | No fallback after the first token |
-| [0006](docs/decisions/0006-api-keys.md) | Gateway API keys: hashed, cached, stale-if-error |
-| [0007](docs/decisions/0007-rate-limits-and-budgets.md) | Token-aware rate limits and budgets: estimate, then reconcile |
-| [0008](docs/decisions/0008-observability.md) | Usage log, metrics with bounded labels, logs without prompts |
-| [0009](docs/decisions/0009-benchmarking.md) | How the gateway is benchmarked |
-| [0010](docs/decisions/0010-anthropic-messages-inbound.md) | Inbound Anthropic Messages API, translated at the edge |
-| [0011](docs/decisions/0011-model-catalog-and-pricing-sync.md) | Model catalog, and price sync with review |
-| [0012](docs/decisions/0012-openai-compatible-provider-rules.md) | Per-provider parameter rules for OpenAI-compatible APIs, and the `frontier` alias |
-| [0013](docs/decisions/0013-lossless-anthropic-features.md) | Prompt caching and extended thinking through `/v1/messages` |
-| [0014](docs/decisions/0014-openai-responses-api.md) | OpenAI Responses API adapter |
-| [0015](docs/decisions/0015-cost-accuracy.md) | Long-context tiers, cache-write prices and off-peak pricing |
-| [0016](docs/decisions/0016-teams-key-edits-production.md) | Teams, key edits, body limits and production packaging |
-| [0017](docs/decisions/0017-policy-routing.md) | Policy routing (`model: auto`) |
-| [0018](docs/decisions/0018-response-cache.md) | Response cache, exact and semantic |
-| [0019](docs/decisions/0019-self-healing-alerts.md) | Self-healing: background probes, quarantine, alerts |
-| [0020](docs/decisions/0020-ab-routing.md) | A/B routing with weighted, sticky variants |
-| [0021](docs/decisions/0021-prompt-injection-filter.md) | Prompt-injection filter |
-| [0022](docs/decisions/0022-llm-as-judge.md) | LLM-as-judge sampling |
-| [0023](docs/decisions/0023-security-hardening.md) | Security hardening after the audit: billing, shared breakers, bounded requests |
-| [0024](docs/decisions/0024-operational-readiness.md) | Operational readiness: alert routing, runbooks, backups, budget alerts |
-| [0025](docs/decisions/0025-security-finish.md) | Pre-deploy security: image and dependency scanning, operator keys, audit log, networks |
-| [0026](docs/decisions/0026-test-depth.md) | Test depth: fuzzing, golden provider fixtures, end-to-end production stack in CI |
-| [0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) | One gateway: a governance layer on the routing gateway |
-| [0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md) | Access policy, data classes on the fallback chain, and the decision log |
-| [0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md) | Identity: OIDC tokens, and groups from a SCIM-provisioned directory |
-| [0030](docs/decisions/0030-eval-gate-for-model-changes.md) | An eval gate for model changes: golden tasks, regression against the current model |
 
 ## Development
 
