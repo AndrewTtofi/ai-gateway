@@ -9,6 +9,7 @@
 - [Architecture](Architecture.md)
 - [Providers and translation](Providers-and-Translation.md)
 - [Routing and reliability](Routing-and-Reliability.md)
+- [Identity: OIDC and SCIM](Identity.md)
 - [Governance: policy, data classes, audit](Governance.md)
 - [Keys, limits and budgets](Keys-Limits-and-Budgets.md)
 - [Observability](Observability.md)

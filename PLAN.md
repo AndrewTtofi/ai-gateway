@@ -213,17 +213,18 @@ Needs no accounts. Brings the policy model in before real identity plugs into it
       system-of-record connector.
 
 ### Phase 15 — Real identity (`phase-15-identity`)
-The most important phase. Needs an Okta developer tenant, which the owner creates.
-- [ ] A walkthrough for the tenant: an API service app for the gateway's audience, an
-      authorization server, and a SCIM 2.0 provisioning app that points at the gateway.
-- [ ] `make tunnel`: expose the local gateway through a cloudflared tunnel, because the
-      identity provider can't reach localhost.
-- [ ] SCIM 2.0 server, stored in Postgres: users and groups, the `members[value eq "x"]`
+The most important phase. Built and tested against authentik in the compose stack, so it
+needs no account (ADR 0029). The walkthrough covers other providers.
+- [x] authentik as code (a blueprint): an OIDC provider for the gateway's audience and a
+      SCIM 2.0 provider that points at the gateway. A walkthrough for it and for other providers.
+- [x] `make idp`: authentik on the compose network, so no tunnel is needed. (A hosted
+      provider needs one; the walkthrough says how.)
+- [x] SCIM 2.0 server, stored in Postgres: users and groups, the `members[value eq "x"]`
       form of PATCH remove, and error bodies in the SCIM error schema.
-- [ ] OIDC bearer tokens checked against the provider's JWKS (issuer, audience, expiry).
+- [x] OIDC bearer tokens checked against the provider's JWKS (issuer, audience, expiry).
       Groups come from the provisioned directory, not from token claims.
-- [ ] Tests for create, deactivate and group membership, including "a deactivated user gets 403".
-- [ ] A script that fetches a real client-credentials token and calls `/healthz` and one
+- [x] Tests for create, deactivate and group membership, including "a deactivated user gets 403".
+- [x] A script that fetches a real client-credentials token and calls `/healthz` and one
       tool endpoint, to prove the flow end to end.
 
 ### Phase 16 — Evals for model changes (`phase-16-evals`)

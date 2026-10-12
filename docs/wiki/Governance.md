@@ -34,10 +34,12 @@ which fails when:
 Policy and audit never see a credential. They see a **principal**: a subject, its groups,
 the roles those groups map to, a tier and a team.
 
-Today a gateway API key is a *service* principal. Its tier is the one an operator gave it,
-and its team counts as its group, so the keys of team `compliance` get the role that group
-maps to. Users and groups from the identity provider arrive in the next phase and become
-principals the same way.
+- **A user** authenticates with an OIDC token. Their groups come from the directory the
+  identity provider provisions, and the policy turns those groups into roles and a tier
+  ([Identity](Identity.md)).
+- **A gateway API key** is a *service* principal. Its tier is the one an operator gave it,
+  and its team counts as its group, so the keys of team `compliance` get the role that
+  group maps to.
 
 ## Data classes
 

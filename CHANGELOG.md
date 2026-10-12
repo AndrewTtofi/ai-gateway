@@ -9,6 +9,14 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (identity, ADR 0029)
+- **OIDC:** users call the gateway with an access token from the identity provider, verified against its JWKS (asymmetric algorithms only, issuer, audience, expiry). `OIDC_ISSUER`, `OIDC_AUDIENCE`, and optionally `OIDC_JWKS_URL`, `OIDC_USER_CLAIM`, `OIDC_USER_MATCH`.
+- **SCIM 2.0 server** at `/scim/v2` (`SCIM_TOKEN`): the identity provider provisions users, groups and memberships (migration 0010). Accepts the PATCH forms of Okta, Entra and authentik. Every change is in the admin audit log as operator `scim`.
+- **Groups come from the directory on every request**, not from token claims: a deactivated user, or one removed from a group, loses access with a token that is still valid. `403 user_not_provisioned`, `user_deactivated`, `no_entitlement`, each a recorded decision.
+- **Per-user limits, budget and usage:** a user's directory id is their identity across all of their tokens.
+- **authentik for the dev stack** (`make idp`, `docker-compose.idp.yml`, a blueprint), and `make idp-e2e`: join, move, leave against a real identity provider, run in CI.
+- Dependency: PyJWT (with cryptography).
+
 ### Added (governance core, ADR 0028)
 - **Access policy** (`config/policy.yaml`): group → role → tier, data classes, a data-handling rule per model, connector entitlements, and a version. Validated by a schema and cross-checked against the other config files at load, on reload and in CI (`make policy`). Every routable model needs a rule.
 - **Data classes:** a request declares its class with `x-gateway-data-class` (else the policy default). Models that may not hold that class are removed from the fallback chain before routing; with none left, `403 data_class_not_eligible`. The response cache and judge sampling are skipped above the policy's secondary-use class.

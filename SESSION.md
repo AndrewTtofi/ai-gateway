@@ -5,24 +5,38 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 14, governance core, done (ADR 0028): access policy, data classes on the fallback chain, tools behind the policy, the decision log. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-14-governance-core`, stacked on `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
+- **Phase:** 15, real identity, done (ADR 0029): a SCIM 2.0 server and directory, OIDC token verification, groups read from the directory on every request, authentik as the dev identity provider. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-15-identity`, stacked on `phase-14-governance-core` and `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
 - **Status:**
-  - `make test`: 650 pass and 39 skip locally without Redis and Postgres (CI runs them all); lint clean.
-  - CI runs: tests with fuzzing, the policy check, pip-audit, a Trivy image scan, and an end-to-end job on the production compose stack.
-  - Migration 0009 (`decision_log`) is new; no dev database has it yet.
+  - `make test`: 707 pass and 42 skip locally without Redis and Postgres (CI runs them all); lint clean.
+  - CI runs: tests with fuzzing, the policy check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik (join, move, leave).
+  - Migrations 0009 (`decision_log`) and 0010 (directory) are new; no dev database has them yet.
+  - Docker isn't available in the WSL shell these sessions run in, so compose-based checks (`make idp-e2e`, `scripts/e2e_prod.sh`) are verified in CI only.
 - **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 15, real identity (`PLAN.md`): SCIM server, OIDC tokens, groups from the directory. Needs an Okta developer tenant from the owner.
-- **Blockers:** phase 15 needs the Okta tenant. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
+  - Phase 16, evals for model changes (`PLAN.md`). The live run needs an Anthropic API key and permission to spend; `--offline` doesn't.
+- **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
 - **Open questions:**
   - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
   - The wiki workflow needs the wiki's first page created once in the web UI.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
+  - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 18 (identity)
+**Did**
+- SCIM 2.0 server (`/scim/v2`) and a directory in Postgres (migration 0010); every change audited as operator `scim`.
+- OIDC access tokens verified against the provider's JWKS; a user travels the request path in the same shape as an API key, so limits, budget and usage are per user.
+- Groups are read from the directory on every request, not from token claims.
+- authentik in the dev stack from a blueprint (`make idp`), and `scripts/identity_e2e.sh` (join, move, leave) as a CI job.
+- Chose authentik over a hosted tenant: no account, no tunnel, testable in CI.
+
+**Learned**
+- Reading the provider's source beat guessing: authentik sends the same hashed user id as the token's `sub` and as the SCIM `externalId`, removes group members with the path-filter form, and issues no client-credentials token unless the grant type is listed on the provider.
+- "Groups in the token" and "groups in a directory" differ by exactly the token's lifetime. That gap is the whole reason for SCIM.
 
 ### 2026-10-12 — Session 17 (governance core)
 **Did**
