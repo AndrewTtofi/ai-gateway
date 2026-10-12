@@ -121,8 +121,13 @@ def test_a_real_response_is_read_for_text_and_tool_calls() -> None:
 
 
 def test_the_gateways_tools_are_offered_as_function_definitions() -> None:
-    (definition,) = connectors.tool_definitions()
-    fn = definition["function"]
+    by_name = {d["function"]["name"]: d["function"] for d in connectors.tool_definitions()}
+    assert set(by_name) == {
+        "mock_records__lookup_case",
+        "github__list_pull_requests",
+        "github__get_pull_request",
+    }
+    fn = by_name["mock_records__lookup_case"]
     assert fn["name"] == "mock_records__lookup_case"
     assert fn["parameters"]["required"] == ["case_id"] and fn["description"]
     assert connectors.tool_id(fn["name"]) == "mock_records.lookup_case"

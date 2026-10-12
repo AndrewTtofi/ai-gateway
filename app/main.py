@@ -815,7 +815,8 @@ async def call_tool(
     try:
         result = await target.call(tool, call.args, await target.credential())
     except connectors.ConnectorError as exc:
-        return error_response(502, str(exc), "api_error", "connector_error")
+        code = "connector_not_configured" if exc.status == 503 else "connector_error"
+        return error_response(exc.status, str(exc), "api_error", code)
     return {"connector": connector, "tool": tool, "result": result}
 
 
