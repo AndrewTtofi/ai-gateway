@@ -9,6 +9,11 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-12 (Phases 13–19: the governance layer)
+
+The first release as `ai-gateway`. Every request passes identity → policy → spend →
+routing → audit (ADR 0027). Releases up to 1.3.1 are the routing gateway, llm-gateway.
+
 ### Added (presentation)
 - **README** rewritten around the governed path: the problem, the architecture, a quickstart, a 60-second demo, what's real and what's mocked, and the design decisions with their trade-offs.
 - **`docs/demo.md`**, **`docs/architecture.md`**, **`docs/runbook.md`** (access, policy changes, model changes, spend, connectors, secrets, audit evidence) and **`docs/enablement/`** (how tools are governed, for compliance, for the people using them, and for engineers).
