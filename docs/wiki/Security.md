@@ -25,6 +25,13 @@ The gateway holds the organisation's provider API keys and sees every prompt. Th
 | Huge requests | Bodies over `MAX_BODY_BYTES` get a 413 before parsing; Caddy caps them at the edge too |
 | Cross-tenant cache leaks and poisoning | The response cache is scoped per key by default; team or global sharing is an explicit choice. In shared scopes a caller can't force a refresh, and semantic matching needs `shared_semantic: true` ([Response cache](Response-Cache.md#scope-who-shares-answers)) |
 | Forged request ids | `x-request-id` is always the gateway's own; a caller's id is kept separately, so it can't collide with other tenants' rows |
+| A leaver or mover keeping access | Groups are read from the SCIM-provisioned directory on every request, not from token claims; a deactivated user is refused with a token that is still valid ([Identity](Identity.md)) |
+| Forged or replayed identity tokens | Signature against the provider's published keys, asymmetric algorithms only, issuer, audience and expiry checked; unknown key ids trigger at most one key refetch a minute |
+| A rogue provisioning client | `/scim/v2` has its own bearer token, compared in constant time; every write is in the admin audit log as operator `scim` |
+| Sensitive data reaching a model that keeps it | Each model has a data-class ceiling; ineligible models are removed from the fallback chain before routing; the cache and judge follow the same ceiling. A model with no rule gets no data ([Governance](Governance.md)) |
+| A tool reaching more than it should | Connectors need a policy entry, a role and a data-class ceiling; arguments are validated before they reach a URL; results are trimmed ([Connectors](Connectors.md)) |
+| Long-lived credentials for other systems | None stored: a GitHub App key is traded for a one-hour, read-only token kept in memory; the key is a mounted file, never a variable |
+| Raising one's own spend limit | Exceptions are approved by a policy-named group, never by the requester; grants expire with the month; every step is audited |
 | Dashboard credentials | In production, Grafana reads Postgres through a read-only role that can't see `key_hash` |
 
 ## Recommendations for operators

@@ -1,5 +1,32 @@
 # FAQ
 
+**How do I give someone access?**
+Add them to a group in your identity provider. It pushes the user and the membership to
+the gateway over SCIM, and `config/policy.yaml` maps the group to a role and a tier.
+Nothing is done in the gateway itself. See [Identity](Identity.md).
+
+**How does a service get access?**
+With a gateway API key: `make key name=my-app tier=standard team=compliance`. The team is
+the key's group for the policy.
+
+**Is there a UI?**
+No. Operators use `make` targets and the API, and access changes are pull requests against
+`config/policy.yaml`. Grafana shows usage and spend; the identity provider has its own
+console for users and groups.
+
+**Is there a CLI?**
+Not a dedicated one. `make key`, `make reload`, `make policy`, `make decisions`,
+`make evals` and `make admin-key` cover day-to-day operation; everything else is the
+admin API with `curl`. Callers use any OpenAI or Anthropic SDK.
+
+**Does the gateway detect confidential data?**
+No. The caller declares the data class in a header and the gateway enforces it. See
+[Governance](Governance.md#data-classes).
+
+**Someone hit their monthly cap. Now what?**
+They ask for an exception, and a member of the approver group decides. See
+[Keys, limits and budgets](Keys-Limits-and-Budgets.md#spend-exceptions).
+
 **Is it only for OpenAI?**
 No. "OpenAI-compatible" is the API format clients use. Requests can go to Claude (the first
 choice in most built-in aliases), OpenAI, Ollama or any OpenAI-compatible server. Clients

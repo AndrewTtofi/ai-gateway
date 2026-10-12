@@ -54,7 +54,7 @@ Set `ALERT_WEBHOOK_URL` to an incoming-webhook URL and every breaker state chang
 Slack accepts the payload as-is; other tools get the same JSON.
 
 ```json
-{"text": "🔴 LLM gateway: openai/gpt-6-astra circuit closed → open (quota exhausted)",
+{"text": "🔴 AI gateway: openai/gpt-6-astra circuit closed → open (quota exhausted)",
  "target": "openai/gpt-6-astra", "from": "closed", "to": "open", "reason": "quota exhausted"}
 ```
 

@@ -1,5 +1,21 @@
 # Architecture
 
+## The governed path
+
+Every request passes five stages: **identity → policy → spend → routing → audit**.
+
+| Stage | What happens | Page |
+|-------|--------------|------|
+| 1. Identity | An OIDC token or a gateway API key becomes one principal: subject, groups, roles, tier | [Identity](Identity.md) |
+| 2. Policy | Tier, role and data class are checked against `config/policy.yaml` | [Governance](Governance.md) |
+| 3. Spend | Rate limits, then an atomic hold against the monthly budget; soft and hard caps | [Keys, limits and budgets](Keys-Limits-and-Budgets.md) |
+| 4. Routing | The alias's chain, filtered to the models that may hold this data, with retries and breakers | [Routing and reliability](Routing-and-Reliability.md) |
+| 5. Audit | A decision record and a usage row, joined by request id | [Governance](Governance.md#the-decision-log), [Observability](Observability.md) |
+
+The [architecture overview](https://github.com/AndrewTtofi/ai-gateway/blob/main/docs/architecture.md)
+has the diagram of the whole path, where groups come from, and the trust boundaries. The
+rest of this page is the component-level view, centred on stage four.
+
 ## Components
 
 ```mermaid
@@ -43,6 +59,12 @@ flowchart LR
 | Response cache | `app/cache.py` | Exact and semantic answer cache ([Response cache](Response-Cache.md)) |
 | Guardrails, judge | `app/guardrails.py`, `app/judge.py` | Prompt-injection filter; background answer scoring ([Quality and safety](Quality-and-Safety.md)) |
 | Extensions | `app/extensions.py` | Anthropic-only fields (caching, thinking) carried through the internal format |
+| Access policy | `app/access.py`, `config/policy.yaml` | Group → role → tier, data classes, model eligibility, connector entitlements ([Governance](Governance.md)) |
+| Identity | `app/oidc.py`, `app/scim.py`, `app/directory.py` | OIDC token verification, the SCIM 2.0 server, users and groups ([Identity](Identity.md)) |
+| Decision log | `app/decisions.py` | One record per decision, allow or deny, written in background batches |
+| Connectors | `app/connectors.py` | Tools behind the policy, with short-lived credentials ([Connectors](Connectors.md)) |
+| Spend exceptions | `app/spend_exceptions.py` | Requests for more budget, approvals, and the grant lookup |
+| Eval gate | `evals/` | Golden tasks on the current and the candidate model ([Model evals](Model-Evals.md)) |
 | Responses API | `app/providers/openai_responses.py` | Chat completions ↔ OpenAI Responses API |
 
 ## Life of a request
@@ -104,6 +126,10 @@ sequenceDiagram
 |-------|-------|-----------|
 | API keys | Postgres `api_keys` | Durable and queryable; hashed only |
 | Usage history | Postgres `usage_log` | One row per request, for exact per-key reports |
+| Users and groups | Postgres `directory_*` | Provisioned over SCIM; read on each request through a 30 s cache |
+| Decisions | Postgres `decision_log` | Who was allowed or refused what, under which policy version |
+| Admin changes | Postgres `admin_audit` | Key changes, reloads, provisioning writes, spend decisions |
+| Spend exceptions | Postgres `spend_exceptions` | Requests, decisions and who made them |
 | Token buckets, spend | Redis | Shared by every replica and updated atomically on the hot path |
 | Circuit breakers | Redis | One replica's failures should protect all of them |
 | Key cache | In-process | Keeps Postgres off the hot path; 30 s revocation lag |

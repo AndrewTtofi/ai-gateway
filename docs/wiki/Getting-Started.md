@@ -41,6 +41,7 @@ The dev stack binds every port to `127.0.0.1`, so nothing is exposed on your net
 
 ```bash
 make key name=me tier=dev
+make key name=case-bot tier=standard team=compliance   # a key in a team
 ```
 
 The command prints a `gw_…` key once. The gateway stores only its SHA-256 hash, so save it
@@ -110,8 +111,19 @@ The primary of `chaos-down` always fails:
 Open Grafana → **LLM Gateway** to watch it happen. `chaos-blip` is down for 20 s of every
 minute, so you can also watch its breaker recover.
 
-## 5. Next steps
+## 5. See the governance layer
 
+A key's team is its group, and `config/policy.yaml` maps groups to roles. The
+[demo](https://github.com/AndrewTtofi/ai-gateway/blob/main/docs/demo.md) walks through a
+tool that one role may call and another may not, confidential data kept away from hosted
+models, a hard spend cap with an approved exception, and the decision log, in about a
+minute and without any account. `make idp` adds an identity provider to the stack
+([Identity](Identity.md)).
+
+## 6. Next steps
+
+- Onboard people through your identity provider: [Identity](Identity.md).
+- Decide who may use what: [Governance](Governance.md).
 - Point real apps at it: [API reference](API-Reference.md).
 - Change which models an alias uses: [Configuration reference](Configuration-Reference.md).
 - Route Claude Code through it: [Providers and translation → Anthropic clients](Providers-and-Translation.md#inbound-anthropic-messages-api-v1messages).
