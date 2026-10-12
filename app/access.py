@@ -194,12 +194,18 @@ class Principal:
 
 
 def principal_for_key(key: ApiKey, policy: AccessPolicy) -> Principal:
-    """An API key is a service identity. An operator assigned its tier directly; its team
-    counts as its group, so a team's keys get that team's role."""
-    groups = (key.team,) if key.team else ()
+    """The caller as policy and audit see them.
+
+    An API key is a service identity: an operator assigned its tier directly, and its team
+    counts as its group, so a team's keys get that team's role. A user comes from the
+    identity provider with the directory's groups."""
+    if key.kind == "user":
+        groups = key.groups
+    else:
+        groups = (key.team,) if key.team else ()
     return Principal(
-        subject=f"key:{key.id}",
-        kind="service",
+        subject=f"{'user' if key.kind == 'user' else 'key'}:{key.id}",
+        kind=key.kind,
         name=key.name,
         groups=groups,
         roles=policy.roles(groups),

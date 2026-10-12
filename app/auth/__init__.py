@@ -13,7 +13,7 @@ from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker
@@ -58,6 +58,11 @@ class ApiKey:
     created_at: datetime | None = None
     revoked: bool = False
     team: str | None = None  # teams have their own monthly budget (limits.yaml)
+    # A caller authenticated by the identity provider is carried through the request path
+    # in this same shape (ADR 0029): `id` is their directory id, so limits, spend and
+    # usage are per user; `tier` comes from their groups; `groups` are the directory's.
+    kind: Literal["service", "user"] = "service"
+    groups: tuple[str, ...] = ()
 
     @property
     def team_spend_id(self) -> str | None:
