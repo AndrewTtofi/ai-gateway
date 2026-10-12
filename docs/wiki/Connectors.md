@@ -100,6 +100,44 @@ and set `GITHUB_APP_PRIVATE_KEY_FILE` to the path inside the container.
 **Rotate the key:** generate a new one on the app's page, replace the file, delete the old
 key on GitHub. The gateway reads the file at the next exchange, within the hour; no restart.
 
+## External tool servers
+
+Some tools run outside the gateway: an MCP server that works in Jira and Confluence as
+each user, with that user's own grant
+([mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed)). The
+gateway doesn't call it. The server authenticates the user itself, then asks the gateway
+for a decision on every tool call ([ADR 0033](../decisions/0033-decisions-for-external-tool-servers.md)):
+
+```bash
+curl localhost:8000/v1/authorize -H "Authorization: Bearer $SERVER_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"subject":"<the user id from their token>","connector":"atlassian","tool":"jira_search"}'
+# {"allowed":true,"code":"ok","reason":"ok","policy_version":"2026-10-13.1"}
+```
+
+```yaml
+# config/policy.yaml
+connectors:
+  atlassian:
+    external: true                 # no code in the gateway; it only decides
+    min_tier: standard
+    max_data_class: internal
+    allowed_roles: [engineer, compliance, trader]
+    tools: [jira_search, jira_get_issue, jira_add_comment]   # empty = any tool name
+
+delegated_decisions:
+  client_groups: [mcp-servers]     # the services that may ask; empty = nobody
+```
+
+- **The server's credential** is a gateway API key in one of those groups:
+  `make key name=mcp-atlassian tier=standard team=mcp-servers`.
+- **The user's token is never forwarded.** The server sends the token's subject; the
+  gateway looks that user up in its directory, so a deactivated user is refused here too.
+- **A refusal is `200` with `allowed: false`** and a code (`role_not_allowed`,
+  `tier_too_low`, `data_class_not_eligible`, `tool_not_exposed`, `user_deactivated`, …).
+- **The decision is recorded under the user's name,** with `asked_by` naming the server.
+- **The server must fail closed** if the gateway doesn't answer.
+
 ## Add a connector
 
 1. A class in `app/connectors.py` with `name`, `tools`, `schemas`, `credential()` and

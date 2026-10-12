@@ -139,6 +139,22 @@ Generate a new key on the app's settings page, replace the file, then delete the
 on GitHub. The gateway reads the file at its next token exchange, within the hour. No
 restart.
 
+### Onboard an external tool server
+1. Add an entry under `connectors:` in `config/policy.yaml` with `external: true`, the
+   roles, tier and data-class ceiling, and the tools it may ask about. Bump the version.
+2. Make sure its group is in `delegated_decisions.client_groups` and is a team in
+   `config/limits.yaml`.
+3. `make policy`, merge, `make reload`.
+4. Create its key: `make key name=<server> tier=standard team=mcp-servers`, and give it
+   to the server as its gateway credential.
+5. Check: a call through the server appears in `make decisions` under the user's name.
+
+### An external tool server's users are all refused
+`make decisions` shows the code. `user_not_provisioned` for everyone means the server and
+the gateway don't agree on the user identifier: the `sub` in the server's tokens must be
+what the gateway matches in its directory (`OIDC_USER_MATCH`). `not_a_decision_client`
+means the server's key is not in an allowed group.
+
 ### Add a connector
 See [Connectors](wiki/Connectors.md#add-a-connector): a class, a policy entry, tests.
 

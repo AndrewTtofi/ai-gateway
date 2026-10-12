@@ -145,6 +145,13 @@ caught before it ships (ADR 0030).
    - through the gateway: an allowed role, a refused role, a refused data class.
 4. A golden task in `evals/golden.yaml` if a model should (or shouldn't) reach for it.
 
+## Tools the gateway doesn't run
+
+A tool server can live outside the gateway and still be governed by it: it authenticates
+the user, then asks `POST /v1/authorize` whether that user may use that tool with that
+class of data. The policy entry is marked `external: true`. The user's token is never
+forwarded; the gateway resolves the user from its own directory. See ADR 0033.
+
 ## Limits
 
 - The data class is declared, not detected.

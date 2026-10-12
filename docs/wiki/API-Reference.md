@@ -18,6 +18,7 @@ The interactive OpenAPI docs are at `http://localhost:8000/docs`.
 | POST | `/v1/messages` | Anthropic Messages API, streaming or not |
 | POST | `/v1/messages/count_tokens` | The gateway's input-token estimate (counts as one request against the key's limit) |
 | POST | `/v1/tools/{connector}/{tool}` | Call a connector's tool: `{args}`. Behind the access policy; counts as one request ([Governance](Governance.md#tools)) |
+| POST | `/v1/authorize` | For external tool servers: may this user use this tool? `{subject, connector, tool, data_class?}` → `{allowed, code, reason, policy_version}`. Only services in the policy's `delegated_decisions.client_groups` ([Connectors](Connectors.md#external-tool-servers)) |
 | POST | `/v1/spend/exceptions` | Ask for more budget this month: `{amount_usd, reason}` ([Budgets](Keys-Limits-and-Budgets.md#spend-exceptions)) |
 | GET | `/v1/spend/exceptions` | Your requests; approvers see everyone's. `?status=pending\|approved\|denied` |
 | POST | `/v1/spend/exceptions/{id}/approve`, `/deny` | Decide a pending request (approver groups only): `{amount_usd?, note?}` |
