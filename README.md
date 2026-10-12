@@ -3,9 +3,10 @@
 > **Status: v2 in progress.** This repo continues [llm-gateway](https://github.com/AndrewTtofi/llm-gateway)
 > and adds a governance layer for an enterprise AI platform, so that every request passes
 > identity → policy → spend → routing → audit. Built so far: the routing gateway described
-> below, and the [policy and audit steps](docs/wiki/Governance.md) (data classes that filter
-> the fallback chain, tools behind the policy, a decision log). Identity from an identity
-> provider and spend exceptions are next. The phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
+> below, [identity](docs/wiki/Identity.md) (OIDC tokens, users and groups provisioned over
+> SCIM, a bundled identity provider for the dev stack), and the
+> [policy and audit steps](docs/wiki/Governance.md) (data classes that filter the fallback
+> chain, tools behind the policy, a decision log). The eval gate and spend exceptions are next. The phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
 > and [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) explains the design.
 
 A self-hosted gateway that sits between your applications and LLM providers. Apps talk to
@@ -460,6 +461,7 @@ Each non-obvious choice has an ADR in [docs/decisions/](docs/decisions/):
 | [0026](docs/decisions/0026-test-depth.md) | Test depth: fuzzing, golden provider fixtures, end-to-end production stack in CI |
 | [0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) | One gateway: a governance layer on the routing gateway |
 | [0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md) | Access policy, data classes on the fallback chain, and the decision log |
+| [0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md) | Identity: OIDC tokens, and groups from a SCIM-provisioned directory |
 
 ## Development
 

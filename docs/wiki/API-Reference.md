@@ -20,6 +20,7 @@ The interactive OpenAPI docs are at `http://localhost:8000/docs`.
 | POST | `/v1/tools/{connector}/{tool}` | Call a connector's tool: `{args}`. Behind the access policy; counts as one request ([Governance](Governance.md#tools)) |
 | GET | `/v1/models` | Aliases (with their chains) and direct models this key may use |
 | GET | `/v1/catalog` | Price, capabilities, quality, breaker state and live stats per model this key may use; `?capability=`, `?min_context=`, `?sort=price\|quality\|ttft\|latency` ([Choosing models](Choosing-Models.md)); counts as one request |
+| * | `/scim/v2/Users`, `/scim/v2/Groups` | SCIM 2.0, for the identity provider; its own bearer token ([Identity](Identity.md#the-scim-server)) |
 | GET | `/healthz` | Liveness: the process answers |
 | GET | `/readyz` | Readiness: 503 until startup completes; then 200 `ready` / `degraded`, with dependency status |
 | POST | `/admin/keys` | Create a key: `{name, tier, team?, requests_per_minute?, tokens_per_minute?, monthly_budget_usd?, allowed_aliases?}` |
@@ -99,6 +100,8 @@ On `/v1/messages*`, errors use Anthropic's shape:
 | 400 | `no_route` | No model satisfies the policy and the request's needs | No; relax the request |
 | 400 | `prompt_injection_detected` | Blocked by the prompt-injection filter (tier action `block`) | No |
 | 401 | `invalid_api_key` | Missing, malformed or revoked key | No |
+| 401 | `invalid_token` | An OIDC token that fails verification (signature, issuer, audience, expiry) | No; get a new token |
+| 403 | `user_not_provisioned`, `user_deactivated`, `no_entitlement` | A valid token whose user the directory doesn't know, has deactivated, or has in no group that grants access ([Identity](Identity.md)) | No |
 | 403 | `model_not_allowed` | The key's tier doesn't allow this alias | No |
 | 403 | `tier_unknown` | The key's tier was removed from `limits.yaml` | No; operator fix |
 | 403 | `team_unknown` | The key's team was removed from `limits.yaml` (fails closed) | No; operator fix |
