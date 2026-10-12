@@ -149,3 +149,14 @@ Instead of picking a model in the app, send `model: "auto"`, plus hints if you l
 (`optimize: quality`, `needs: [tools]`). The gateway builds the fallback chain per request
 from this catalog: cheapest-first, best-first or fastest-first, skipping open breakers and
 models without the needed capabilities or context. See [Smart routing](Smart-Routing.md).
+
+## Before a model can be used at all
+
+Two things outside this page gate a model:
+
+- **A data-handling rule.** A model with no entry under `models:` in `config/policy.yaml`
+  receives no data, and `make policy` fails while a routable model lacks one
+  ([Governance](Governance.md)).
+- **The eval gate.** Before the model behind an alias changes, run the golden tasks on
+  the current and the candidate model: `make evals current=… candidate=…`
+  ([Model evals](Model-Evals.md)).

@@ -26,18 +26,26 @@ Python 3.14 · FastAPI · Pydantic v2 · httpx (async) · Redis 8 · Postgres 18
 ## Layout
 ```
 app/
-  main.py            FastAPI app, routes
+  main.py            FastAPI app, routes, the request pipeline
   config.py          settings (env) + YAML loaders for config/
+  access.py          the access policy: roles, tiers, data classes, connectors
+  oidc.py scim.py directory.py   identity: token checks, SCIM server, users and groups
+  decisions.py       the decision log
+  connectors.py      tools behind the policy (GitHub App, mock system of record)
+  spend_exceptions.py  requests for more budget, approvals, grants
   schemas.py         OpenAI-format request/response models
   providers/         one adapter per provider; base.py defines the interface
   routing/           alias resolution, fallback chain, circuit breaker
-  ratelimit/         token bucket (Redis + Lua)
+  ratelimit/         token bucket and spend (Redis + Lua)
   observability/     metrics, logging, usage records
 config/
+  policy.yaml        who may do what; which model may hold which data  ← bump `version`
   models.yaml        aliases, models, fallback chains  ← ONLY place models are named
   pricing.yaml       $/1M tokens per model
-  limits.yaml        default rate limits and budgets
-tests/               unit/, integration/, load/
+  limits.yaml        tiers, soft and hard caps, teams
+evals/               golden tasks and the eval gate for model changes
+tests/               unit, integration, load/, e2e/
+docs/                demo, architecture, runbook, enablement/, wiki/
 docs/decisions/      ADRs (NNNN-title.md)
 ```
 
@@ -52,6 +60,8 @@ docs/decisions/      ADRs (NNNN-title.md)
 - New behaviour needs a test. Mock providers with `respx`; never call paid APIs in unit tests.
   Integration tests against real providers are marked `@pytest.mark.live` and skipped by default.
 - Errors returned to clients use OpenAI's error shape: `{"error": {"message", "type", "code"}}`.
+- Decision and audit records never hold content (prompts, answers, tool arguments, tokens).
+- A policy change bumps `version` in `config/policy.yaml` and passes `make policy`.
 - Non-obvious decisions → ADR in `docs/decisions/` using `0000-template.md`.
 
 ## Commands
@@ -62,7 +72,11 @@ make test        # unit + integration (no live calls)
 make test-live   # includes live provider tests (costs money)
 make lint        # ruff + mypy
 make logs
-make reload      # hot-reload config/models.yaml
+make reload      # hot-reload config/*.yaml
+make policy      # validate the access policy against the rest of the config
+make decisions   # the latest governance decisions
+make idp         # the stack plus an identity provider (authentik)
+make evals current=A candidate=B   # the eval gate (costs money)
 ```
 
 ## Agents

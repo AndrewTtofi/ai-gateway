@@ -96,7 +96,18 @@ Keep the model-side defences:
 - confirm irreversible actions;
 - treat tool output as data, never as instructions.
 
+### Tool results are untrusted too
+
+Text that comes back from a connector (a pull request description, a case note) is
+written by someone else. When it is passed to a model as a tool result, the filter scans
+it like user input, and tool definitions are scanned as well.
+
 ## LLM-as-judge sampling
+
+The judge sends a sample of prompts and answers to another model, so it only samples
+requests at or below `secondary_use_max_data_class` in `config/policy.yaml`. One gap: the
+optional injection classifier above is not under that ceiling yet.
+
 
 ADR 0022. Latency, errors and cost are measured on every request. **Answer quality** needs
 a reviewer. The judge is a strong model that grades a sample of real answers against your

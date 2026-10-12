@@ -9,7 +9,7 @@ host as `docker compose -f docker-compose.prod.yml --env-file .env.prod …`, wr
 `dc …` below. Operator endpoints are on the localhost listener:
 `curl -s localhost:8081/admin/providers -H "Authorization: Bearer $GATEWAY_ADMIN_KEY"`.
 
-Dashboards: Grafana → **LLM Gateway** (through the SSH tunnel to `127.0.0.1:3000`).
+Dashboards: Grafana → **AI Gateway** (through the SSH tunnel to `127.0.0.1:3000`).
 
 ---
 

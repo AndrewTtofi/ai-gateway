@@ -1,15 +1,24 @@
 # Roadmap
 
-Where the gateway goes after v1.3.0. Phases 0–11 are done (see `PLAN.md` and the
-[CHANGELOG](https://github.com/AndrewTtofi/ai-gateway/blob/main/CHANGELOG.md)). This page is
-a plan, not a promise. Items come from gaps found while building and auditing the gateway:
-- decisions deferred in the ADRs;
-- requests the gateway still rejects;
-- what running it for real will need.
+Where the gateway goes after v2.1. The routing gateway (phases 0–12) and the governance
+layer (phases 13–20) are done; see `PLAN.md` and the
+[CHANGELOG](https://github.com/AndrewTtofi/ai-gateway/blob/main/CHANGELOG.md). This page is
+a plan, not a promise. Each item says **why** it matters, so the order can change.
 
-Each item says **why** it matters, so the order can change as needs do.
+## Next: make the governance claims stronger
 
-## Next: run it for real (v1.4)
+| Item | Why |
+|------|-----|
+| **Run the eval gate between two hosted models** | It has only compared two local models so far |
+| **Verify SCIM and OIDC against a hosted identity provider** (Okta, Entra) | Their request forms are covered from documentation, not a live tenant |
+| **Notify approvers** of a pending spend exception | Today they have to list the queue |
+| **A retention job for the decision log** | Usage rows are pruned; decision records never are |
+| **Put the injection classifier under the data-class ceiling** | It is the one feature that can still copy prompt content to a model without that check |
+| **Budget grants for teams,** not only individual callers | A team at its cap is still raised by editing config |
+| **Token exchange (RFC 8693) for external tool servers** | The gateway would verify the user itself instead of taking a named service's word (ADR 0033) |
+| **Detect sensitive data** instead of trusting the declared class | Enforcement is exact; classification is the caller's job |
+
+## Run it for real
 
 The gateway is built, tested and hardened, but it hasn't served real traffic yet.
 
@@ -21,7 +30,7 @@ The gateway is built, tested and hardened, but it hasn't served real traffic yet
 | **Dashboards from real usage**: tune guardrail weights, cache thresholds, `concurrent_requests` and `output_tokens_per_second` | All of these defaults are educated guesses until real traffic tunes them |
 | ~~**Backups and a restore drill**~~ | Done: daily `pg_dump`, restore and `make restore-drill` (ADR 0024) |
 
-## Soon: wider API coverage (v1.5)
+## Wider API coverage
 
 | Item | Why |
 |------|-----|
@@ -31,7 +40,7 @@ The gateway is built, tested and hardened, but it hasn't served real traffic yet
 | **Batch APIs** (Anthropic and OpenAI, ~50% cheaper) for jobs that can wait | The cheapest tokens are the ones billed at half price |
 | **Exact token counts** from the providers' count endpoints, for `count_tokens` and the estimate | The character estimate is rough. Billing is reconciled anyway, but rate limits and context fit use the estimate |
 
-## Later: operating it at scale (v2)
+## Operating it at scale
 
 | Item | Why |
 |------|-----|
@@ -39,7 +48,7 @@ The gateway is built, tested and hardened, but it hasn't served real traffic yet
 | **OpenTelemetry tracing** (gateway → provider spans, trace ids into the usage log) | Metrics say *that* p95 rose; traces say *where* |
 | **Fleet-wide concurrency limits** (in Redis), as an option | The per-key limit is per replica today (ADR 0023) |
 | **Redis Cluster / Sentinel, and multi-region** | Limits fail open when Redis is down; high availability makes that rare |
-| **An admin UI and self-service keys**, with SSO for operators | Today keys, teams and budgets are managed with curl and the admin key |
+| **An admin UI** for keys, the exception queue and the decision log | Today those are `make` targets and the API. People already sign in through the identity provider |
 | **Per-team routing defaults** (policy, allowed models, guardrail level per team) | Teams have budgets; they should be able to have their own rules too |
 | **Judge cost per team** (a judge budget, or charging samples to the alias's owners) | Judge calls are recorded (`_judge`) but are the operator's cost |
 
@@ -49,7 +58,6 @@ The gateway is built, tested and hardened, but it hasn't served real traffic yet
 |------|-----|
 | **PII detection and redaction** before prompts leave the gateway | The gateway sees every prompt; it's the natural place to keep emails, card numbers and IDs from providers |
 | **Output scanning** (secrets, PII, unsafe links in answers) | The injection filter only looks at what goes in |
-| **Offline evaluation sets** next to judge sampling | Regression-test a model or prompt change before an A/B test exposes users to it |
 | **Prompt templates and versions** managed in the gateway | A/B tests already change prompts per arm; versioned templates make that reviewable |
 
 ## Not planned

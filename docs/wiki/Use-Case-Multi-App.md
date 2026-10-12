@@ -25,7 +25,7 @@ With the gateway:
 ```
 support-bot ─┐
 docs-qa ─────┤                      ┌─► Anthropic (Claude)
-nightly-dig. ├──► LLM Gateway ──────┼─► OpenAI
+nightly-dig. ├──► AI Gateway ───────┼─► OpenAI
 sales-assist ┤   one URL            └─► Ollama (on-prem GPU box)
 developers ──┘   one key per app
 ```
@@ -158,7 +158,7 @@ export ANTHROPIC_MODEL=coding
 
 ## Step 5: run it
 
-**Spend.** Grafana → *LLM Gateway* → "Spend per key — this month" shows every app side by
+**Spend.** Grafana → *AI Gateway* → "Spend per key — this month" shows every app side by
 side. For finance, query the usage log directly:
 
 ```sql
@@ -212,6 +212,19 @@ everywhere, and the provider keys never need rotating, because apps never had th
 | Finance | Exact spend per app, team and person; hard monthly caps |
 | Security | Provider keys in one service; prompts never logged; per-app access to models; instant revocation |
 | Users | Fewer outages: one provider's incident becomes a fallback, not a failure |
+
+## Adding people and data rules
+
+The same setup extends from apps to people and to what the data may touch:
+
+- **People sign in** through the identity provider, and their groups decide their tier
+  and tools, with no key to hand out ([Identity](Identity.md)).
+- **A key's team is its group** for the access policy: a key in the `compliance` team gets
+  the compliance role and the tools that role allows ([Governance](Governance.md)).
+- **Each request can declare a data class.** An app handling contracts sends
+  `x-gateway-data-class: confidential` and can only be answered by models allowed to hold it.
+- **A soft cap warns before the hard cap refuses,** and an exception needs a second
+  person ([Keys, limits and budgets](Keys-Limits-and-Budgets.md#soft-cap-and-hard-cap)).
 
 ## Going further
 

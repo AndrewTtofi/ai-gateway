@@ -53,6 +53,31 @@ it turned out to be most of the work.
 - Provider outage: **3** requests went to the dead provider before the breaker opened, and **0** errors reached clients
 - **100%** of requests were served through provider, Redis and Postgres failures. The trade-off: while Redis is down, rate limits are off (budgets keep the last known spend), and while Postgres is down, keys not in the cache get 503. **97/97** streams survived a SIGTERM.
 
+## Part two: the governance layer
+
+The gateway above answers "which model, and what did it cost?". A company adopting AI
+also has to answer "who may use this, with which data, and can you show me?". Version 2
+adds that in front of the router: identity → policy → spend → routing → audit.
+
+What that taught me:
+
+- **A token is a snapshot.** Put groups in it and a leaver keeps access until it expires.
+  Groups have to come from a directory the identity provider keeps current (SCIM), read
+  on every request.
+- **Governance can't be bolted on from outside.** "Confidential data never reaches a model
+  that keeps it" has to be applied where fallback happens, by filtering the chain, or the
+  first outage breaks the promise.
+- **A cap needs a way past it, or it gets set too high.** A second person approves an
+  exception that expires with the month.
+- **A connector should hold a key, not a token.** A GitHub App's key is traded for a
+  one-hour, read-only token.
+- **Changing a model is a release.** An eval gate compares the candidate with the model
+  it would replace, on real tool calls.
+- **The audit log is only useful if it never holds content.** Then it can be kept, queried
+  and shown.
+
+The README's "design decisions and trade-offs" section has each of these with its cost.
+
 Code, ADRs and full results: https://github.com/AndrewTtofi/ai-gateway
 
 ---

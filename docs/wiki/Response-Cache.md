@@ -78,6 +78,14 @@ Sharing also means trusting the other callers (ADR 0023):
 | Failure | Cache errors are logged and ignored. A cache never fails a request |
 | Metric | `gateway_cache_total{mode, result}`: `hit_exact`, `hit_semantic`, `miss`, `store`, `bypass`, `refresh` |
 
+## Sensitive data is never cached
+
+A cache copies prompt content into another store, and the semantic cache sends it to an
+embedding model. Both happen only for requests at or below
+`secondary_use_max_data_class` in `config/policy.yaml` (`internal` as shipped). A
+`confidential` request skips the lookup and the store, whatever the alias says
+([Governance](Governance.md#data-classes)).
+
 ## When not to cache
 
 - When answers should vary: creative writing, sampling-based evaluations. A cached answer
