@@ -1,4 +1,10 @@
-# LLM Gateway
+# AI Gateway
+
+> **Status: v2 in progress.** This repo continues [llm-gateway](https://github.com/AndrewTtofi/llm-gateway)
+> and adds a governance layer for an enterprise AI platform, so that every request passes
+> identity → policy → spend → routing → audit. Everything described below is the routing
+> gateway, which is built and tested. The governance phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
+> and [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) explains the design.
 
 A self-hosted gateway that sits between your applications and LLM providers. Apps talk to
 **one endpoint** in the OpenAI request format, which most SDKs and tools already speak. The gateway picks the provider, falls back when one
@@ -450,6 +456,7 @@ Each non-obvious choice has an ADR in [docs/decisions/](docs/decisions/):
 | [0024](docs/decisions/0024-operational-readiness.md) | Operational readiness: alert routing, runbooks, backups, budget alerts |
 | [0025](docs/decisions/0025-security-finish.md) | Pre-deploy security: image and dependency scanning, operator keys, audit log, networks |
 | [0026](docs/decisions/0026-test-depth.md) | Test depth: fuzzing, golden provider fixtures, end-to-end production stack in CI |
+| [0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) | One gateway: a governance layer on the routing gateway |
 
 ## Development
 
