@@ -160,6 +160,7 @@ mover and a leaver against authentik and checks the audit trail (about two minut
 | **Spend caps and the exception queue** | **Real.** Atomic in Redis; tested with concurrent requests and concurrent approvers. Budget amounts in `config/limits.yaml` are examples. |
 | **Model calls** | **Real** adapters. Anthropic and Ollama have been run live; OpenAI, Gemini, xAI, Mistral and DeepSeek are covered by tests against recorded and mocked responses only. |
 | **GitHub connector** | **Real.** A GitHub App, a signed JWT, a one-hour installation token; run against GitHub. Unit tests mock GitHub's HTTP. |
+| **Decisions for external tool servers** | **Real** endpoint (`POST /v1/authorize`), used by [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed), an MCP server that acts as each user. Tested on both sides; the two have not been run together against a live Atlassian site. |
 | **`mock_records` connector** | **Mocked.** A stand-in for a system of record, with one case in it, so the policy path can be shown without another system. |
 | **`fake` provider and the `chaos` tier** | **Mocked**, dev stack only. Scripted failures and a priced test model for demos and load tests. Never loaded in production. |
 | **Eval gate** | **Real** harness and golden tasks. Run live between two local models; not yet between hosted models. CI runs it against a deterministic stub. |
@@ -229,6 +230,12 @@ bolted on from outside: eligibility has to be applied where fallback happens.
 *Trade-off:* a larger repository than a governance-only project.
 [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md)
 
+**Tool servers elsewhere ask for a decision; they don't forward tokens.** An MCP server
+that acts as each user verifies the user itself and asks the gateway whether the call is
+allowed. *Trade-off:* the gateway takes a named service's word for who the user is, and
+the server depends on the gateway for every call.
+[ADR 0033](docs/decisions/0033-decisions-for-external-tool-servers.md)
+
 **The audit log never holds content.** Who, what, when, why and under which policy; never
 prompts, answers or tool arguments. *Trade-off:* it can prove a case was looked up and by
 whom, not which case. That belongs in the system of record's own log.
@@ -270,6 +277,7 @@ whom, not which case. That belongs in the system of record's own log.
 | [0030](docs/decisions/0030-eval-gate-for-model-changes.md) | An eval gate for model changes: golden tasks, regression against the current model |
 | [0031](docs/decisions/0031-github-app-credentials-for-connectors.md) | Short-lived connector credentials: a GitHub App |
 | [0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md) | Soft caps and a spend exception queue |
+| [0033](docs/decisions/0033-decisions-for-external-tool-servers.md) | Decisions for external tool servers |
 
 </details>
 
@@ -503,7 +511,7 @@ covers adding a provider, a model or a price.
 
 ## Observability
 
-Grafana provisions the **LLM Gateway** dashboard at startup (pictured above). It shows:
+Grafana provisions the **AI Gateway** dashboard at startup (pictured above). It shows:
 
 - request and error rates, fallback rate by alias, and p95 latency per provider;
 - time to first token, both end to end and per target;
