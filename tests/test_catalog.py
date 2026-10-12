@@ -194,7 +194,7 @@ def test_catalog_reloads_with_the_rest_of_config(
 ) -> None:
     import shutil
 
-    for f in ("models.yaml", "pricing.yaml", "limits.yaml", "catalog.yaml"):
+    for f in ("models.yaml", "pricing.yaml", "limits.yaml", "catalog.yaml", "policy.yaml"):
         shutil.copy(Path("config") / f, tmp_path / f)
     monkeypatch.setattr(config.settings, "config_dir", tmp_path)
     monkeypatch.setattr(config, "catalog", config.catalog)

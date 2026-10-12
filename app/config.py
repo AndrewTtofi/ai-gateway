@@ -12,6 +12,9 @@ import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
+from app import connectors
+from app.access import AccessPolicy, check_references
+
 
 class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
@@ -535,12 +538,23 @@ def load_catalog(config_dir: Path) -> Catalog:
     )
 
 
+def load_access(config_dir: Path) -> AccessPolicy:
+    """config/policy.yaml (ADR 0028). Required: without a policy nothing may be decided."""
+    return AccessPolicy.model_validate(yaml.safe_load((config_dir / "policy.yaml").read_text()))
+
+
+def check_access(reg: Registry, lim: Limits, policy: AccessPolicy) -> None:
+    check_references(policy, set(lim.tiers), reg.routable_targets(), set(connectors.REGISTRY))
+
+
 settings = Settings()
 registry = load_registry(settings.config_dir, settings.gateway_enable_fake)
 limits = load_limits(settings.config_dir)
 pricing = load_pricing(settings.config_dir)
 catalog = load_catalog(settings.config_dir)
 guardrails = load_guardrails(settings.config_dir)
+access: AccessPolicy = load_access(settings.config_dir)
+check_access(registry, limits, access)
 
 
 def check_guardrails(reg: Registry, rules: Guardrails) -> None:
@@ -555,15 +569,17 @@ check_guardrails(registry, guardrails)
 
 
 def reload_registry() -> Registry:
-    """Reload models, limits, pricing and the catalog together. If any file is broken,
-    raise and keep all of them as they were — never a half-applied config."""
-    global registry, limits, pricing, catalog, guardrails
+    """Reload models, limits, pricing, the catalog and the access policy together. If any
+    file is broken, raise and keep all of them as they were — never a half-applied config."""
+    global registry, limits, pricing, catalog, guardrails, access
     new_registry = load_registry(settings.config_dir, settings.gateway_enable_fake)
     new_limits = load_limits(settings.config_dir)
     new_pricing = load_pricing(settings.config_dir)
     new_catalog = load_catalog(settings.config_dir)
     new_guardrails = load_guardrails(settings.config_dir)
     check_guardrails(new_registry, new_guardrails)
+    new_access = load_access(settings.config_dir)
+    check_access(new_registry, new_limits, new_access)
     registry, limits, pricing, catalog = new_registry, new_limits, new_pricing, new_catalog
-    guardrails = new_guardrails
+    guardrails, access = new_guardrails, new_access
     return registry
