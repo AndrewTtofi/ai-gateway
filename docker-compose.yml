@@ -5,11 +5,15 @@ services:
     env_file: .env
     environment:
       GATEWAY_ENABLE_FAKE: "1"       # dev only: loads the chaos provider + chaos aliases
+      # The GitHub App key is mounted below; inside the container it is always here.
+      GITHUB_APP_PRIVATE_KEY_FILE: /run/secrets/github-app.pem
     ports: ["127.0.0.1:8000:8000"]
     volumes:
       - ./config:/app/config:ro      # edit YAML on host, `make reload` picks it up
       - ./app:/app/app               # live code reload in dev
       - ./migrations:/app/migrations:ro
+      # The host path from .env. Unset: an empty file, and the connector answers 503.
+      - ${GITHUB_APP_PRIVATE_KEY_FILE:-/dev/null}:/run/secrets/github-app.pem:ro
     depends_on:
       redis: { condition: service_healthy }
       postgres: { condition: service_healthy }

@@ -5,7 +5,7 @@
 
 # Stamped on every decision record, so an auditor can see which rules were in force.
 # Bump it with every change.
-version: "2026-10-12.1"
+version: "2026-10-12.2"
 
 # Data classes, least to most sensitive. A request declares its class with the
 # `x-gateway-data-class` header; without it, default_data_class applies.
@@ -64,3 +64,9 @@ connectors:
     min_tier: standard
     max_data_class: restricted
     allowed_roles: [compliance, trader]
+  # Pull requests, read-only, through a GitHub App (ADR 0031). The arguments (a repository
+  # name) go to GitHub, so nothing above `internal` may be sent with a call.
+  github:
+    min_tier: standard
+    max_data_class: internal
+    allowed_roles: [engineer]
