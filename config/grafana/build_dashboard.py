@@ -175,7 +175,7 @@ panel("table", "Judge: labels this month", 12, 8, 12, 66, [sql(
 
 dashboard = {
     "uid": "llm-gateway",
-    "title": "LLM Gateway",
+    "title": "AI Gateway",
     "tags": ["llm-gateway"],
     "timezone": "browser",
     "refresh": "30s",
