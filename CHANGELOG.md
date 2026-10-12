@@ -9,6 +9,15 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (presentation)
+- **README** rewritten around the governed path: the problem, the architecture, a quickstart, a 60-second demo, what's real and what's mocked, and the design decisions with their trade-offs.
+- **`docs/demo.md`**, **`docs/architecture.md`**, **`docs/runbook.md`** (access, policy changes, model changes, spend, connectors, secrets, audit evidence) and **`docs/enablement/`** (how tools are governed, for compliance, for the people using them, and for engineers).
+- `make key` takes an optional `team=` and `budget=`; `make decisions` prints the latest decisions as a table.
+- Wiki: the home page, architecture, getting started, concepts, glossary, FAQ, security and production pages cover the governance layer.
+
+### Changed
+- The production stack and the release image are named `ghcr.io/andrewttofi/ai-gateway`.
+
 ### Added (spend caps and exceptions, ADR 0032)
 - **Soft cap:** `soft_budget_usd` per tier. Past it requests still run, with `x-gateway-budget: soft-cap-exceeded`, a note in the decision record and one alert per caller and month.
 - **Spend exception queue:** `POST /v1/spend/exceptions` to ask for more budget this month; `GET` to list; `POST …/{id}/approve` and `…/{id}/deny` for members of the policy's `spend_exceptions.approver_groups`, never for their own request. An approved amount raises that caller's budget for that month only (migration 0011). Every step is a decision record; decisions are also in the admin audit log.

@@ -5,30 +5,41 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 18, spend exceptions and hardening, done (ADR 0032). Phases 13–17 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-18-spend-exceptions`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
+- **Phase:** 19, presentation, done except the release: the repo is still private and v2.0.0 is not tagged. Phases 13–18 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-19-presentation`. Remote `github.com/AndrewTtofi/ai-gateway`. Phase pull requests are rebase-merged once CI is green.
 - **Status:**
   - `make test`: 798 pass and 47 skip without Redis and Postgres; all 845 pass with them; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-  - Verified live on the dev stack on 2026-10-12: a key spent to its hard cap, asked for an exception, could not approve it itself, a `platform-admin` key approved it, and the next request was served; the decision log and the admin audit log held each step.
+  - Every command in the README's demo and in `docs/demo.md` was run against the dev stack on 2026-10-12, and the runbook's SQL against its database.
   - The local dev database is at migration 0011.
-- **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
+- **Released:** nothing from this repo yet. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 19, presentation (`PLAN.md`): README, `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, the user guide; make the repo public; v2.0.0.
+  - Owner's go-ahead, then: make the repo public, move `[Unreleased]` to `[2.0.0]` in the changelog, tag `v2.0.0` (the release workflow builds and publishes the image).
   - A live eval between two hosted models needs provider keys and permission to spend.
-- **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
+- **Blockers:** none.
 - **Open questions:**
-  - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
   - The wiki workflow needs the wiki's first page created once in the web UI.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
   - The GitHub connector uses one installation; several organisations would need one per repository owner.
   - Approvers learn of a pending spend exception only from the list endpoint; nothing notifies them.
-  - This machine has a stale `ghcr.io` login in Docker, which makes public pulls from ghcr fail; `docker logout ghcr.io` clears it.
+  - Decision records have no retention job; usage rows do.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 22 (presentation)
+**Did**
+- README rewritten around the governed path: the problem, the diagram, quickstart, a 60-second demo, real vs. mocked, design decisions with trade-offs. The routing material moved underneath.
+- `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, and `docs/enablement/`: how tools are governed, written for compliance, for the people using them, and for engineers.
+- The wiki's entry pages (home, architecture, getting started, concepts, glossary, FAQ, security, production) cover the governance layer.
+- `make key` takes a team and a budget; `make decisions` prints the decision log as a table.
+
+**Learned**
+- Running the demo before writing it down changed it twice: the decision log lags a second behind the request, and a response carries more headers than the ones worth pointing at.
+- "Real vs. mocked" is the most useful section to write early: it forces a claim for every part, and the gaps list fell out of it.
+- The same capability reads as three different documents depending on who asks: controls and evidence, what to do when it says no, and how it works.
 
 ### 2026-10-12 — Session 21 (spend caps and exceptions)
 **Did**
