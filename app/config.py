@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     # Which claim names the user, and which directory attribute it is matched against.
     oidc_user_claim: str = "sub"
     oidc_user_match: Literal["external_id", "user_name"] = "external_id"
+    # The GitHub connector (ADR 0031): a GitHub App with read-only access to pull requests.
+    # Any of the three empty: the connector answers 503. The key is a file, never a variable.
+    github_app_id: str = ""
+    github_app_installation_id: str = ""
+    github_app_private_key_file: str = ""
+    github_api_url: str = "https://api.github.com"  # GitHub Enterprise Server: https://host/api/v3
     # More operators, one key each: lines of `name sha256-hex-of-key` (ADR 0025).
     admin_keys_file: str = ""
     log_level: str = "INFO"
