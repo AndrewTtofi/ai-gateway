@@ -14,6 +14,7 @@ from app.providers import AdapterPool
 from app.ratelimit import Concurrency, MemoryLimiter, MemorySpend
 from app.routing import router
 from app.routing.breaker import MemoryBreakerStore
+from app.spend_exceptions import Grants, MemoryExceptionStore
 
 UPSTREAM = "http://upstream.test/v1"
 ANTHROPIC_UPSTREAM = "http://anthropic.test"
@@ -71,6 +72,9 @@ def api_key(monkeypatch: pytest.MonkeyPatch) -> str:
     directory = MemoryDirectory()
     monkeypatch.setattr(services, "directory", directory)
     monkeypatch.setattr(services, "identities", CachedIdentities(directory))
+    exceptions = MemoryExceptionStore()
+    monkeypatch.setattr(services, "exceptions", exceptions)
+    monkeypatch.setattr(services, "grants", Grants(exceptions))
     monkeypatch.setattr(config, "access", OPEN_POLICY)
     return add_key("chaos", **UNLIMITED)  # the chaos tier has no concurrency limit
 

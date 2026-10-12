@@ -43,6 +43,7 @@ class EffectiveLimits:
     monthly_budget_usd: float
     allowed_aliases: tuple[str, ...]
     concurrent_requests: int = 0  # in flight per replica; 0 = no limit
+    soft_budget_usd: float | None = None  # warn past this, refuse past the monthly budget
 
     def allows(self, model: str) -> bool:
         return "*" in self.allowed_aliases or model in self.allowed_aliases
@@ -73,16 +74,20 @@ class ApiKey:
         tier = limits.tiers[self.tier]
         o = self.overrides
         allowed = o.get("allowed_aliases")
+        budget = (
+            o["monthly_budget_usd"]
+            if o.get("monthly_budget_usd") is not None
+            else tier.monthly_budget_usd
+        )
+        soft = tier.soft_budget_usd
         return EffectiveLimits(
             requests_per_minute=o.get("requests_per_minute") or tier.requests_per_minute,
             tokens_per_minute=o.get("tokens_per_minute") or tier.tokens_per_minute,
-            monthly_budget_usd=(
-                o["monthly_budget_usd"]
-                if o.get("monthly_budget_usd") is not None
-                else tier.monthly_budget_usd
-            ),
+            monthly_budget_usd=budget,
             allowed_aliases=tuple(allowed if allowed is not None else tier.allowed_aliases),
             concurrent_requests=tier.concurrent_requests,
+            # A key whose own budget is at or below the tier's soft cap has no room for one.
+            soft_budget_usd=soft if soft is not None and soft < budget else None,
         )
 
     def public(self) -> dict[str, Any]:

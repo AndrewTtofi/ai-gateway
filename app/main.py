@@ -42,6 +42,7 @@ from app import (
     providers,
     scim,
     services,
+    spend_exceptions,
 )
 from app.access import DATA_CLASS_HEADER, Principal, principal_for_key
 from app.auth import KEY_FORMAT, ApiKey, EffectiveLimits
@@ -51,7 +52,7 @@ from app.observability import live, metrics
 from app.observability import logging as obs_log
 from app.providers.anthropic_format import DEFAULT_MAX_TOKENS
 from app.providers.base import ProviderAdapter
-from app.ratelimit import estimate_prompt_tokens
+from app.ratelimit import estimate_prompt_tokens, month
 from app.routing import ab, policy, router, selfheal
 from app.routing.router import AllTargetsFailed, Routed, UnknownModel
 from app.schemas import MAX_MESSAGES, ChatCompletionRequest, StreamOptions
@@ -822,6 +823,164 @@ async def call_tool(
     return {"connector": connector, "tool": tool, "result": result}
 
 
+# --- spend exceptions (ADR 0032) -----------------------------------------------------------
+
+NO_DATA = "none"  # the data class recorded for decisions that carry no request content
+
+
+class ExceptionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: float = Field(gt=0)
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ExceptionDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    amount_usd: float | None = Field(default=None, gt=0)  # approve less than was asked for
+    note: str | None = Field(default=None, max_length=500)
+
+
+@app.post("/v1/spend/exceptions", response_model=None, status_code=201)
+async def request_spend_exception(
+    body: ExceptionRequest, key: Authenticated
+) -> dict[str, Any] | JSONResponse:
+    """Ask for more budget this month. Anyone may ask; someone else decides."""
+    lim = key_limits(key)
+    principal = principal_for_key(key, config.access)
+    taken = await services.limiter.take(key.id, lim.requests_per_minute, lim.tokens_per_minute, 0)
+    if not taken.allowed:
+        metrics.rejected.labels("rate_limit").inc()
+        return error_response(
+            429,
+            "Rate limit reached for this key.",
+            "rate_limit_error",
+            "rate_limit_exceeded",
+            headers=taken.headers(),
+        )
+    most = config.access.spend_exceptions.max_usd
+    if body.amount_usd > most:
+        return error_response(
+            400,
+            f"One request may ask for at most ${most:g}.",
+            "invalid_request_error",
+            "amount_too_large",
+            param="amount_usd",
+        )
+    entry = spend_exceptions.new(
+        principal.subject, principal.name, key.id, month(), body.amount_usd, body.reason
+    )
+    if not await services.exceptions.create(entry):
+        return error_response(
+            409,
+            "There is already a pending request for this month.",
+            "invalid_request_error",
+            "exception_pending",
+        )
+    # Recorded without the reason: the decision log never holds free text from a caller.
+    decisions.record(
+        principal,
+        "spend_exception:request",
+        NO_DATA,
+        "allow",
+        exception=entry.id,
+        amount_usd=entry.amount_usd,
+        period=entry.period,
+    )
+    return entry.public()
+
+
+@app.get("/v1/spend/exceptions", response_model=None)
+async def list_spend_exceptions(
+    key: Authenticated,
+    status: Literal["pending", "approved", "denied"] | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, Any]:
+    """Your own requests. Approvers see everyone's."""
+    principal = principal_for_key(key, config.access)
+    approver = config.access.may_approve_spend(principal)
+    found = await services.exceptions.recent(None if approver else principal.subject, status, limit)
+    return {"approver": approver, "exceptions": [e.public() for e in found]}
+
+
+async def _decide_spend_exception(
+    exception_id: str, outcome: Literal["approved", "denied"], body: ExceptionDecision, key: ApiKey
+) -> dict[str, Any] | JSONResponse:
+    principal = principal_for_key(key, config.access)
+    action = f"spend_exception:{'approve' if outcome == 'approved' else 'deny'}"
+
+    def refuse(status: int, code: str, message: str) -> JSONResponse:
+        metrics.rejected.labels(code).inc()
+        decisions.record(
+            principal, action, NO_DATA, "deny", code, message, exception=exception_id[:32]
+        )
+        return error_response(status, message, "permission_error", code)
+
+    if not config.access.may_approve_spend(principal):
+        return refuse(403, "not_an_approver", "Only an approver group may decide spend exceptions.")
+    entry = await services.exceptions.get(exception_id) if len(exception_id) <= 32 else None
+    if entry is None:
+        return error_response(404, "No such spend exception.", "invalid_request_error", "not_found")
+    if entry.subject == principal.subject:
+        return refuse(403, "self_approval", "You can't decide your own request.")
+    granted = None
+    if outcome == "approved":
+        granted = body.amount_usd if body.amount_usd is not None else entry.amount_usd
+        if granted > entry.amount_usd:
+            return error_response(
+                400,
+                "You can approve less than was asked for, not more.",
+                "invalid_request_error",
+                "amount_too_large",
+                param="amount_usd",
+            )
+    decided = await services.exceptions.decide(
+        exception_id, outcome, principal.subject, principal.name, granted, body.note
+    )
+    if decided is None:
+        return error_response(
+            409, "This request was already decided.", "invalid_request_error", "already_decided"
+        )
+    services.grants.forget(decided.spend_id, decided.period)
+    decisions.record(
+        principal,
+        action,
+        NO_DATA,
+        "allow",
+        exception=decided.id,
+        subject=decided.subject,
+        amount_usd=decided.amount_usd,
+        granted_usd=decided.granted_usd,
+        period=decided.period,
+    )
+    await admin_auth.record(
+        principal.subject[:64],
+        f"spend_exception.{'approve' if outcome == 'approved' else 'deny'}",
+        decided.id,
+        subject=decided.subject,
+        amount_usd=decided.amount_usd,
+        granted_usd=decided.granted_usd,
+        period=decided.period,
+    )
+    return decided.public()
+
+
+@app.post("/v1/spend/exceptions/{exception_id}/approve", response_model=None)
+async def approve_spend_exception(
+    exception_id: str, key: Authenticated, body: ExceptionDecision | None = None
+) -> dict[str, Any] | JSONResponse:
+    """Approve a pending request: its amount is added to the caller's budget this month."""
+    return await _decide_spend_exception(exception_id, "approved", body or ExceptionDecision(), key)
+
+
+@app.post("/v1/spend/exceptions/{exception_id}/deny", response_model=None)
+async def deny_spend_exception(
+    exception_id: str, key: Authenticated, body: ExceptionDecision | None = None
+) -> dict[str, Any] | JSONResponse:
+    return await _decide_spend_exception(exception_id, "denied", body or ExceptionDecision(), key)
+
+
 async def _read_json(request: Request) -> dict[str, Any] | str:
     """The body as a JSON object, or what's wrong with it."""
     try:
@@ -1189,27 +1348,33 @@ async def _serve(
         rl_headers["x-gateway-excluded"] = str(len(excluded))
     first = eligible[0]
     team_budget = config.limits.teams.get(key.team) if key.team else None
-    refused = await meter.reserve(first, team_budget.monthly_budget_usd if team_budget else None)
+    team_cap = team_budget.monthly_budget_usd if team_budget else None
+    refused = await meter.reserve(first, team_cap)
+    granted = 0.0
+    if refused == "budget":
+        # At the hard cap. An approved spend exception raises it for this month (ADR
+        # 0032); looked up only now, so callers within budget never pay for the lookup.
+        granted = await services.grants.total(key.id, meter.period)
+        if granted > 0:
+            refused = await meter.reserve(first, team_cap, extra_budget=granted)
     if refused:
         meter.status, meter.error_code = 429, "insufficient_quota"
         await meter.settle()
         whose = "this key's team" if refused == "team_budget" else "this key"
+        message = f"Monthly budget for {whose} is exhausted."
+        if refused == "budget":
+            message += " Ask for more with POST /v1/spend/exceptions."
         metrics.rejected.labels(refused).inc()
-        decisions.record(
-            who.principal,
-            who.action,
-            who.data_class,
-            "deny",
-            refused,
-            f"Monthly budget for {whose} is exhausted.",
-        )
-        return error_response(
-            429,
-            f"Monthly budget for {whose} is exhausted.",
-            "insufficient_quota",
-            "insufficient_quota",
-        )
-    who.allow(chain=eligible, excluded=excluded)
+        decisions.record(who.principal, who.action, who.data_class, "deny", refused, message)
+        return error_response(429, message, "insufficient_quota", "insufficient_quota")
+    budget_detail: dict[str, Any] = {}
+    if meter.over_soft_cap:
+        # Past the soft cap: the request runs, and the caller and the log are told.
+        rl_headers["x-gateway-budget"] = "soft-cap-exceeded"
+        budget_detail["soft_cap_exceeded"] = True
+    if granted > 0:
+        budget_detail["exception_usd"] = granted
+    who.allow(chain=eligible, excluded=excluded, **budget_detail)
     if body.stream:
         # Always ask the provider for usage so streams can be metered (ADR 0007); the
         # meter drops the usage chunk again if the client didn't ask for it. Keep any

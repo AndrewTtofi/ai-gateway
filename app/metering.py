@@ -147,15 +147,19 @@ class Meter:
         self.collector: Any = None  # app.cache.Collector, assembling a streamed answer
         self.cache_result: dict[str, Any] | None = None  # a non-streamed answer to store
         self.variant: str | None = None  # A/B arm (ADR 0020)
+        self.over_soft_cap = False  # set by reserve(): spend is past the soft cap
         # LLM-as-judge (ADR 0022): set when this request was sampled for judging.
         self.judge_cfg: Any = None
         self.judge_conversation = ""
 
-    async def reserve(self, likely_target: str, team_budget: float | None = None) -> str | None:
+    async def reserve(
+        self, likely_target: str, team_budget: float | None = None, extra_budget: float = 0.0
+    ) -> str | None:
         """Hold the estimated cost against the budget until the real cost is known. The
         check and the hold are one atomic step per counter, so a burst of requests can't
         all pass the same stale check. → None, or "budget" / "team_budget" when the
-        budget is already used up (nothing is held then)."""
+        budget is already used up (nothing is held then). `extra_budget` is what approved
+        spend exceptions add to this caller's budget for the month (ADR 0032)."""
         usd = _cost(likely_target, self.prompt_estimate, self.estimate - self.prompt_estimate)
         usd = usd or 0.0
         team = self.key.team_spend_id
@@ -164,7 +168,7 @@ class Meter:
             team_total = await self.spend.reserve(team, usd, team_budget, self.period)
             if team_total is None:
                 return "team_budget"
-        budget = self.limits.monthly_budget_usd
+        budget = self.limits.monthly_budget_usd + extra_budget
         total = await self.spend.reserve(self.key.id, usd, budget, self.period)
         if total is None:
             if team and team_budget is not None:
@@ -174,8 +178,18 @@ class Meter:
             await self.spend.add(team, usd, self.period)  # tracked, no team budget to enforce
         self.reserved_usd = usd
         # Budget alerts: this hold may have crossed 50/80/100% (holds count, like spend).
+        soft = self.limits.soft_budget_usd
+        # Judged on what was spent before this request's hold: the hold is an estimate
+        # and is corrected afterwards, the header shouldn't cry early because of it.
+        self.over_soft_cap = soft is not None and total - usd >= soft
         budget_alerts.crossed(
-            f"key {self.key.prefix} ({self.key.name})", self.key.id, total, usd, budget, self.period
+            f"key {self.key.prefix} ({self.key.name})",
+            self.key.id,
+            total,
+            usd,
+            budget,
+            self.period,
+            soft=soft,
         )
         if team_total is not None and team_budget is not None and self.key.team:
             budget_alerts.crossed(

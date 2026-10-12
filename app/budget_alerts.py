@@ -28,42 +28,52 @@ def usd(amount: float) -> str:
     return f"${amount:,.2f}" if amount >= 1 else f"${amount:.4f}"
 
 
-def crossed(who: str, scope_id: str, total: float, usd: float, budget: float, period: str) -> None:
-    """Called after a successful hold of `usd` brought spend to `total`."""
+def crossed(
+    who: str,
+    scope_id: str,
+    total: float,
+    usd: float,
+    budget: float,
+    period: str,
+    soft: float | None = None,
+) -> None:
+    """Called after a successful hold of `usd` brought spend to `total`. `soft` is the
+    caller's soft cap in dollars, if it has one (ADR 0032)."""
     if budget <= 0 or usd <= 0:
         return
     before = total - usd
-    for level in config.limits.budget_alerts:
-        if before < level * budget <= total:
-            task = asyncio.create_task(_alert(who, scope_id, level, total, budget, period))
+    marks = [(level * budget, str(round(level * 100))) for level in config.limits.budget_alerts]
+    if soft is not None and soft > 0:
+        marks.append((soft, "soft"))
+    for amount, label in marks:
+        if before < amount <= total:
+            task = asyncio.create_task(_alert(who, scope_id, label, total, budget, period))
             _tasks.add(task)
             task.add_done_callback(_tasks.discard)
 
 
 async def _alert(
-    who: str, scope_id: str, level: float, total: float, budget: float, period: str
+    who: str, scope_id: str, label: str, total: float, budget: float, period: str
 ) -> None:
+    """`label` is a percentage of the budget ("80") or "soft" for the soft cap."""
     from app import services  # late: services imports most of the app
 
-    pct = round(level * 100)
-    metrics.budget_alerts.labels(str(pct)).inc()
-    log.warning(
-        "%s reached %d%% of its %s budget (%s of %s)", who, pct, period, usd(total), usd(budget)
-    )
+    reached = "its soft cap" if label == "soft" else f"{label}% of its {period} budget"
+    metrics.budget_alerts.labels(label).inc()
+    log.warning("%s reached %s (%s of %s)", who, reached, usd(total), usd(budget))
     alerts: Any = services.alerts
     if alerts is None:
         return
-    icon = "🛑" if level >= 1 else "⚠️"
+    icon = "🛑" if label == "100" else "⚠️"
     payload = {
-        "text": f"{icon} AI gateway: {who} has used {pct}% of its {period} budget "
-        f"({usd(total)} of {usd(budget)})",
+        "text": f"{icon} AI gateway: {who} has reached {reached} ({usd(total)} of {usd(budget)})",
         "kind": "budget",
         "who": who,
-        "level": pct,
+        "level": label if label == "soft" else int(label),
         "spent_usd": round(total, 4),
         "budget_usd": budget,
         "period": period,
     }
     await alerts.deliver(
-        payload, dedupe=f"budget-alert:{{{scope_id}}}:{period}:{pct}", ttl=DEDUPE_SECONDS
+        payload, dedupe=f"budget-alert:{{{scope_id}}}:{period}:{label}", ttl=DEDUPE_SECONDS
     )
