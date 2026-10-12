@@ -1,9 +1,12 @@
 # AI Gateway — Build Plan
 
-An OpenAI-compatible gateway that sits between your apps and LLM providers, adding
-multi-provider routing, fallback, rate limiting, cost tracking and observability.
-Phases 0–12 built that as llm-gateway. From phase 13 it becomes a governed gateway
-([v2](#v2--the-governance-layer-adr-0027)): identity, policy, spend controls and audit.
+A governed AI gateway for an enterprise AI platform: every request passes
+identity → policy → spend → routing/fallback → audit.
+
+Phases 0–12 built the routing half as llm-gateway: one endpoint between your apps and LLM
+providers, with multi-provider routing, fallback, rate limiting, cost tracking and
+observability. Phases 13–19 add the governance layer
+([v2](#v2--the-governance-layer-adr-0027)).
 
 **Goal:** a portfolio-grade project that teaches the production side of AI engineering
 and becomes the base for later projects (semantic cache, cost autopilot, prompt

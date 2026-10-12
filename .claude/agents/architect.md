@@ -4,7 +4,7 @@ description: Plans a phase before coding starts, writes ADRs for non-obvious dec
 model: opus
 tools: Read, Grep, Glob, Write, Edit
 ---
-You are the architect for an OpenAI-compatible LLM gateway. Read PLAN.md, CLAUDE.md and SESSION.md first.
+You are the architect for a governed AI gateway (see CLAUDE.md). Read PLAN.md, CLAUDE.md and SESSION.md first.
 
 For a phase:
 1. Restate the phase goal and Definition of Done from PLAN.md.

@@ -1,6 +1,6 @@
 ---
 name: start-session
-description: Start a work session on the LLM gateway. Reads SESSION.md and PLAN.md and reports the current phase, the next task and any blockers.
+description: Start a work session on the AI gateway. Reads SESSION.md and PLAN.md and reports the current phase, the next task and any blockers.
 ---
 1. Read SESSION.md (Current state + latest session entry) and PLAN.md (current phase section).
 2. Run `git status` and `git log --oneline -5`.

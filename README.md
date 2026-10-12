@@ -7,10 +7,10 @@
 > and [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) explains the design.
 
 A self-hosted gateway that sits between your applications and LLM providers. Apps talk to
-**one endpoint** in the OpenAI request format, which most SDKs and tools already speak. The gateway picks the provider, falls back when one
-fails, enforces per-key rate limits and budgets, and records what every request cost.
+**one endpoint**, the gateway picks the provider, falls back when one fails, enforces
+per-key rate limits and budgets, and records what every request cost.
 
-**"OpenAI-compatible" describes the API the gateway exposes, not the providers behind it.**
+**The request formats are a compatibility detail, not the product.**
 Clients use the OpenAI chat-completions format (`/v1/chat/completions`) or the **Anthropic
 Messages API** (`/v1/messages`, for the Anthropic SDKs and Claude Code). Internally every
 request is converted to one format, which is what lets a request that started on Claude fall

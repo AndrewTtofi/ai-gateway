@@ -3,9 +3,11 @@
 Instructions for Claude Code working in this repo.
 
 ## Project
-Governed AI gateway for an enterprise AI platform. An OpenAI-compatible LLM gateway
-(multi-provider routing, fallback, rate limiting, cost tracking, observability) that is
-gaining a governance layer: identity → policy → spend → routing → audit (ADR 0027).
+Governed AI gateway for an enterprise AI platform: every request passes
+identity → policy → spend → routing → audit (ADR 0027). The routing half is built
+(multi-provider routing, fallback, rate limiting, cost tracking, observability); the
+governance layer is being added. Clients call it in the OpenAI chat-completions or the
+Anthropic Messages format; that is the wire format, not what the project is.
 Full plan in `PLAN.md`. Current state in `SESSION.md`.
 
 The owner is a platform/DevOps engineer learning AI engineering. When you write
