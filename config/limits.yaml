@@ -18,7 +18,10 @@ tiers:
   dev:
     requests_per_minute: 60
     tokens_per_minute: 50000
-    monthly_budget_usd: 10
+    monthly_budget_usd: 10           # the hard cap: requests are refused past it
+    # The soft cap (ADR 0032): past it requests still run, the response carries
+    # `x-gateway-budget: soft-cap-exceeded` and one alert goes out. Omit for none.
+    soft_budget_usd: 8
     # Aliases (or exact provider/model names) this tier may call; "*" = everything.
     allowed_aliases: [fast, local]   # chaos aliases exist only with GATEWAY_ENABLE_FAKE=1
     injection: log                   # prompt-injection filter (ADR 0021): off | log | flag | block
@@ -27,6 +30,7 @@ tiers:
     requests_per_minute: 300
     tokens_per_minute: 200000
     monthly_budget_usd: 100
+    soft_budget_usd: 80
     allowed_aliases: [fast, balanced, smart, local, frontier, auto]
     injection: log                   # start with log; move to flag/block once tuned
     concurrent_requests: 50
@@ -36,3 +40,14 @@ tiers:
     monthly_budget_usd: 1
     allowed_aliases: [chaos, chaos-down, chaos-blip, fake/ok, fake/metered]
     concurrent_requests: 0           # load tests drive hundreds of requests per key
+
+# Teams: a monthly budget shared by a team's keys and by the users in the group of the
+# same name, on top of each one's own budget. A key's team is also its group for the
+# access policy (policy.yaml: group_roles), which is how a service gets a role.
+# Example values: set them from your own budgets.
+teams:
+  eng-backend:    { monthly_budget_usd: 2000 }
+  eng-platform:   { monthly_budget_usd: 2000 }
+  trading-desk:   { monthly_budget_usd: 5000 }
+  compliance:     { monthly_budget_usd: 1000 }
+  platform-admin: { monthly_budget_usd: 500 }
