@@ -37,7 +37,7 @@ ok() { echo "  ok   $*"; }
 fail() { echo "  FAIL $*" >&2; exit 1; }
 
 echo "build"
-docker build -q -t ghcr.io/andrewttofi/llm-gateway:e2e . > /dev/null
+docker build -q -t ghcr.io/andrewttofi/ai-gateway:e2e . > /dev/null
 echo "start"
 dc up -d caddy gateway migrate redis redis-cache postgres backup > /dev/null 2>&1
 for _ in $(seq 1 90); do
