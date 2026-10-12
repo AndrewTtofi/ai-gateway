@@ -254,9 +254,11 @@ Model calls and real token usage already exist (phases 2 and 4).
       production stack passes the identity and GitHub connector settings.
 
 ### Phase 19 — Presentation (`phase-19-presentation`)
-- [ ] README: the problem first, the architecture diagram, quickstart, "what's real vs.
+- [x] README: the problem first, the architecture diagram, quickstart, "what's real vs.
       mocked", a 60-second demo with curl, and "design decisions and trade-offs".
-- [ ] `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, and the user guide.
+- [x] `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, and
+      `docs/enablement/`: one capability explained for three audiences.
+- [x] The wiki brought up to date with the governance layer.
 - [ ] Make the repo public; release v2.0.0.
 
 ### After v2
