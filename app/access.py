@@ -42,6 +42,11 @@ class ConnectorRule(BaseModel):
     min_tier: str
     max_data_class: str
     allowed_roles: list[str] = []  # empty = any role with the tier
+    # An external tool server (an MCP server, say) that runs the tools itself and asks
+    # the gateway whether a user may use them: POST /v1/authorize (ADR 0033).
+    external: bool = False
+    # The tools an external connector may ask about. Empty = any tool name.
+    tools: list[str] = []
 
 
 class SpendExceptionRule(BaseModel):
@@ -51,6 +56,14 @@ class SpendExceptionRule(BaseModel):
 
     approver_groups: list[str] = []  # empty: nobody can approve (fail closed)
     max_usd: float = Field(default=100, gt=0)  # the most one request may ask for
+
+
+class DelegatedDecisionRule(BaseModel):
+    """Which services may ask the gateway for a decision about a user (ADR 0033)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_groups: list[str] = []  # empty: nobody may ask (fail closed)
 
 
 class AccessPolicy(BaseModel):
@@ -72,6 +85,7 @@ class AccessPolicy(BaseModel):
     secondary_use_max_data_class: str
     connectors: dict[str, ConnectorRule] = {}
     spend_exceptions: SpendExceptionRule = SpendExceptionRule()
+    delegated_decisions: DelegatedDecisionRule = DelegatedDecisionRule()
 
     @model_validator(mode="after")
     def _consistent(self) -> AccessPolicy:
@@ -120,6 +134,12 @@ class AccessPolicy(BaseModel):
         """The highest tier among the caller's roles; None if no group maps to a role."""
         tiers = [self.role_tiers[r] for r in self.roles(groups)]
         return max(tiers, key=self.tier_rank.index) if tiers else None
+
+    def may_ask_decisions(self, principal: Principal) -> bool:
+        """Only a service: a person's token is for calling the gateway as themselves."""
+        return principal.kind == "service" and bool(
+            set(principal.groups) & set(self.delegated_decisions.client_groups)
+        )
 
     def may_approve_spend(self, principal: Principal) -> bool:
         return bool(set(principal.groups) & set(self.spend_exceptions.approver_groups))
@@ -243,6 +263,10 @@ def check_references(
             + ", ".join(unclassified)
             + " (add the model, or its provider as provider/*)"
         )
-    for name in policy.connectors:
-        if name not in connectors:
+    for name, rule in policy.connectors.items():
+        if rule.external and name in connectors:
+            raise ValueError(f"policy connectors: {name!r} is external but also built in")
+        if not rule.external and name not in connectors:
             raise ValueError(f"policy connectors: {name!r} is not a registered connector")
+        if rule.tools and not rule.external:
+            raise ValueError(f"policy connectors: {name!r} lists tools but is not external")

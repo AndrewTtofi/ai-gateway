@@ -5,7 +5,7 @@
 
 # Stamped on every decision record, so an auditor can see which rules were in force.
 # Bump it with every change.
-version: "2026-10-12.3"
+version: "2026-10-13.1"
 
 # Data classes, least to most sensitive. A request declares its class with the
 # `x-gateway-data-class` header; without it, default_data_class applies.
@@ -72,6 +72,27 @@ connectors:
     min_tier: standard
     max_data_class: internal
     allowed_roles: [engineer]
+  # An external tool server: an MCP server for Jira and Confluence that runs its tools
+  # with each user's own Atlassian access (ADR 0033). The gateway doesn't call it; the
+  # server asks the gateway, per call, whether the user may use the tool.
+  atlassian:
+    external: true
+    min_tier: standard
+    max_data_class: internal
+    allowed_roles: [engineer, compliance, trader]
+    tools:
+      - jira_search
+      - jira_get_issue
+      - confluence_search
+      - confluence_get_page
+      - jira_add_comment
+      - jira_create_issue
+      - jira_delete_comment
+
+# Which services may ask for a decision about a user (POST /v1/authorize). A service is
+# a gateway API key; its team is its group. Empty: nobody may ask.
+delegated_decisions:
+  client_groups: [mcp-servers]
 
 # Spend exceptions (ADR 0032). Anyone at their monthly cap may ask for more with
 # POST /v1/spend/exceptions; only these groups may approve or deny, and never their own

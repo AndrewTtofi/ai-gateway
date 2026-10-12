@@ -51,3 +51,6 @@ teams:
   trading-desk:   { monthly_budget_usd: 5000 }
   compliance:     { monthly_budget_usd: 1000 }
   platform-admin: { monthly_budget_usd: 500 }
+  # Tool servers that ask the gateway for decisions (policy.yaml: delegated_decisions).
+  # They call no models, so they have no budget.
+  mcp-servers:    { monthly_budget_usd: 0 }

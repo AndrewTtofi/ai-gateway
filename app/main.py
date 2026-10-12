@@ -29,6 +29,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest, start_http_s
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from app import (
+    access,
     admin_auth,
     cache,
     config,
@@ -147,7 +148,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 _docs = config.settings.docs_enabled
 app = FastAPI(
     title="AI Gateway",
-    version="2.0.0",
+    version="2.1.0",
     lifespan=lifespan,
     docs_url="/docs" if _docs else None,
     redoc_url="/redoc" if _docs else None,
@@ -821,6 +822,131 @@ async def call_tool(
         code = "connector_not_configured" if exc.status == 503 else "connector_error"
         return error_response(exc.status, str(exc), "api_error", code)
     return {"connector": connector, "tool": tool, "result": result}
+
+
+# --- decisions for external tool servers (ADR 0033) ----------------------------------------
+
+
+class DecisionQuestion(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subject: str = Field(min_length=1, max_length=200)  # the user, as their token names them
+    connector: str = Field(min_length=1, max_length=64)
+    tool: str = Field(min_length=1, max_length=64)
+    data_class: str | None = Field(default=None, max_length=64)
+
+
+@app.post("/v1/authorize", response_model=None)
+async def authorize(
+    question: DecisionQuestion, key: Authenticated
+) -> dict[str, Any] | JSONResponse:
+    """May this user use this tool of an external tool server? Asked by the server, which
+    has already verified the user's token for itself and must not pass it on. The gateway
+    answers from the directory and the policy, as it would for its own tools, and records
+    the decision under the user's name."""
+    lim = key_limits(key)
+    policy = config.access
+    asker = principal_for_key(key, policy)
+    action = f"tool:{question.connector}.{question.tool}"
+    if not policy.may_ask_decisions(asker):
+        metrics.rejected.labels("not_a_decision_client").inc()
+        message = "This caller may not ask for decisions about other users."
+        decisions.record(asker, "authorize", NO_DATA, "deny", "not_a_decision_client", message)
+        return error_response(403, message, "permission_error", "not_a_decision_client")
+    taken = await services.limiter.take(key.id, lim.requests_per_minute, lim.tokens_per_minute, 0)
+    if not taken.allowed:
+        metrics.rejected.labels("rate_limit").inc()
+        return error_response(
+            429,
+            "Rate limit reached for this key.",
+            "rate_limit_error",
+            "rate_limit_exceeded",
+            headers=taken.headers(),
+        )
+    data_class = (question.data_class or policy.default_data_class).lower()
+    if data_class not in policy.data_classes:
+        return error_response(
+            400,
+            f"Unknown data class '{question.data_class}'.",
+            "invalid_request_error",
+            "invalid_data_class",
+            param="data_class",
+        )
+    try:
+        identity = await services.identities.lookup(
+            config.settings.oidc_user_match, question.subject
+        )
+    except Exception as exc:  # directory down: no answer is not a yes
+        log.error("directory lookup failed: %s", type(exc).__name__)
+        return error_response(
+            503, "authentication backend unavailable", "api_error", "auth_unavailable"
+        )
+
+    def answer(principal: Principal, verdict: access.Decision) -> dict[str, Any]:
+        if not verdict.allowed:
+            metrics.rejected.labels(verdict.code).inc()
+        decisions.record(
+            principal,
+            action,
+            data_class,
+            "allow" if verdict.allowed else "deny",
+            verdict.code,
+            verdict.reason,
+            asked_by=asker.subject,
+        )
+        return {
+            "allowed": verdict.allowed,
+            "code": verdict.code,
+            "reason": verdict.reason,
+            "policy_version": policy.version,
+        }
+
+    def unknown(
+        code: str, reason: str, subject: str, name: str, groups: tuple[str, ...]
+    ) -> dict[str, Any]:
+        principal = Principal(subject, "user", name[:100], groups, policy.roles(groups), "-")
+        return answer(principal, access.Decision(False, code, reason))
+
+    if identity is None:
+        who = question.subject
+        return unknown(
+            "user_not_provisioned",
+            "This user has not been provisioned.",
+            f"token:{who[:64]}",
+            who,
+            (),
+        )
+    user, groups = identity.user, identity.groups
+    subject = f"user:{user.id}"
+    if not user.active:
+        return unknown(
+            "user_deactivated", "This user is deactivated.", subject, user.user_name, groups
+        )
+    tier = policy.tier(groups)
+    if tier is None:
+        return unknown(
+            "no_entitlement",
+            "None of this user's groups grants access.",
+            subject,
+            user.user_name,
+            groups,
+        )
+    principal = Principal(subject, "user", user.user_name[:100], groups, policy.roles(groups), tier)
+    rule = policy.connectors.get(question.connector)
+    if rule is not None and not rule.external:
+        # The gateway's own connectors are called through it, not asked about.
+        return answer(
+            principal,
+            access.Decision(
+                False, "connector_not_external", "that connector is called through the gateway"
+            ),
+        )
+    verdict = policy.check_connector(principal, question.connector, data_class)
+    if verdict.allowed and rule is not None and rule.tools and question.tool not in rule.tools:
+        verdict = access.Decision(
+            False, "tool_not_exposed", f"'{question.connector}' does not expose that tool"
+        )
+    return answer(principal, verdict)
 
 
 # --- spend exceptions (ADR 0032) -----------------------------------------------------------
