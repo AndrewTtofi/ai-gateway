@@ -1,4 +1,4 @@
-.PHONY: up down logs policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
+.PHONY: up down logs idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
 
 up:
 	docker compose up -d --build
@@ -20,6 +20,19 @@ test-live:
 
 lint:
 	ruff check app tests tools && mypy app tools
+
+# The dev stack plus an identity provider (authentik) on http://localhost:9000 (ADR 0029).
+IDP = docker compose -f docker-compose.yml -f docker-compose.idp.yml
+idp:
+	$(IDP) up -d --build
+
+idp-down:
+	$(IDP) down
+
+# Join, move, leave: provision a user in the identity provider, call the gateway as them,
+# deprovision, get a 403. Builds its own throwaway stack.
+idp-e2e:
+	scripts/identity_e2e.sh
 
 # Validate config/policy.yaml against the rest of the config (ADR 0028).
 policy:
