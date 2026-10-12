@@ -37,6 +37,10 @@ flowchart LR
 | **4. Routing** | Which model answers? | The alias's fallback chain, **already filtered** to the models allowed to hold this data, tried in order with retries and a circuit breaker per model. | `app/routing/`, `app/providers/` |
 | **5. Audit** | What was decided, and what did it cost? | One decision record per request, allowed or denied, with the policy version. One usage row with tokens, cost and latency. Joined by request id. Never content. | `app/decisions.py`, `app/observability/` |
 
+A tool server that runs elsewhere (an MCP server acting as each user) authenticates the
+user itself and asks `POST /v1/authorize` for the policy decision, which is recorded in
+the same log ([ADR 0033](decisions/0033-decisions-for-external-tool-servers.md)).
+
 A tool call (`POST /v1/tools/{connector}/{tool}`) takes the same path, with a connector in
 place of the router. The connector mints a short-lived credential only after the policy
 allowed the call (`app/connectors.py`).
