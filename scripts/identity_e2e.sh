@@ -19,8 +19,9 @@ env_file="$work/env"
 rand() { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 admin_token="$(rand)"
 admin_key="$(rand)"   # the gateway's operator key, for reading the logs at the end
+scim_token="$(rand)"
 cat > "$env_file" <<ENV
-SCIM_TOKEN=$(rand)
+SCIM_TOKEN=$scim_token
 GATEWAY_OIDC_CLIENT_SECRET=$(rand)
 AUTHENTIK_SECRET_KEY=$(rand)
 AUTHENTIK_BOOTSTRAP_PASSWORD=$(rand)
@@ -124,9 +125,13 @@ tool() {  # → the HTTP status and error code of a tool call with alice's token
     -H 'x-gateway-data-class: restricted' -d '{"args":{"case_id":"C-1001"}}'
   python3 -c "import json;d=json.load(open('$work/out'));print(' ' + str((d.get('error') or {}).get('code') or 'ok'))" 2>/dev/null || echo " ?"
 }
-expect() {  # expect "STATUS CODE" DESCRIPTION: polls, since provisioning is asynchronous
+# Provisioning is asynchronous: authentik queues a task per change, behind the dozens of
+# start-up tasks it is still working through on a fresh boot. So poll, and for minutes.
+expect() {  # expect "STATUS CODE" DESCRIPTION
   local want="$1" what="$2" got=""
-  for _ in $(seq 1 90); do got="$(tool)"; [ "$got" = "$want" ] && { ok "$what ($got)"; return 0; }; sleep 1; done
+  for _ in $(seq 1 150); do got="$(tool)"; [ "$got" = "$want" ] && { ok "$what ($got)"; return 0; }; sleep 2; done
+  echo "  the gateway's directory holds: $(curl -s "$gw/scim/v2/Users" -H "Authorization: Bearer $scim_token" \
+    | json '[u["userName"] for u in d.get("Resources", [])]' 2>/dev/null || echo '?')" >&2
   fail "$what: wanted '$want', last got '$got'"
 }
 
