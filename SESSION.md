@@ -5,26 +5,41 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 15, real identity, done (ADR 0029): a SCIM 2.0 server and directory, OIDC token verification, groups read from the directory on every request, authentik as the dev identity provider. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-15-identity`, stacked on `phase-14-governance-core` and `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
+- **Phase:** 16, evals for model changes, done (ADR 0030). Phases 13–15 (baseline, governance core, identity) are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-16-evals`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 707 pass and 42 skip locally without Redis and Postgres (CI runs them all); lint clean.
-  - CI runs: tests with fuzzing, the policy check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik (join, move, leave).
-  - Migrations 0009 (`decision_log`) and 0010 (directory) are new; no dev database has them yet.
-  - Docker isn't available in the WSL shell these sessions run in, so compose-based checks (`make idp-e2e`, `scripts/e2e_prod.sh`) are verified in CI only.
+  - `make test`: 739 pass and 42 skip without Redis and Postgres; all 781 pass with them (run locally in Docker and in CI); lint clean.
+  - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
+  - Verified locally in Docker on 2026-10-12: `scripts/e2e_prod.sh`, `scripts/identity_e2e.sh`, the dev stack with a real local model (Ollama) through the data-class path, and the live eval gate between two local models.
+  - The local dev database is at migration 0010.
 - **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 16, evals for model changes (`PLAN.md`). The live run needs an Anthropic API key and permission to spend; `--offline` doesn't.
+  - Phase 17, short-lived connector credentials (`PLAN.md`): a GitHub App connector. Needs a GitHub App the owner creates.
+  - A live eval between two hosted models needs provider keys and permission to spend.
 - **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
 - **Open questions:**
   - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
   - The wiki workflow needs the wiki's first page created once in the web UI.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
+  - A key's team only gives it a role if the team is also in `limits.yaml` (`teams:`), and the shipped file has none: service keys can't reach role-limited tools out of the box.
+  - This machine has a stale `ghcr.io` login in Docker, which makes public pulls from ghcr fail; `docker logout ghcr.io` clears it.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 19 (local verification, evals)
+**Did**
+- Ran everything locally in Docker for the first time in this repo: the full suite against real Redis and Postgres, both end-to-end scripts, and the dev stack with Ollama.
+- The fuzz test found a 500 on content parts with a null or non-string `text`. Fixed at validation (400), with regression tests.
+- The eval gate: harness, six golden tasks, tool schemas on connectors, offline CI check, manual live workflow.
+- A live run between two local models caught two real regressions (a smaller model calling a tool to do arithmetic).
+
+**Learned**
+- A fuzz test that passes in CI has only not failed yet. Running it a few more times locally found a whole class of input the handlers assumed away; the fix belonged at the edge, not in each of the ten places that read the field.
+- Gate on regression against the current model, not on an absolute score: a task both models fail is information, not a blocker.
+- The first version of a golden check tested a wording ("rolled back") and failed a correct answer ("a rollback"). Check facts.
 
 ### 2026-10-12 — Session 18 (identity)
 **Did**

@@ -6,7 +6,8 @@
 > below, [identity](docs/wiki/Identity.md) (OIDC tokens, users and groups provisioned over
 > SCIM, a bundled identity provider for the dev stack), and the
 > [policy and audit steps](docs/wiki/Governance.md) (data classes that filter the fallback
-> chain, tools behind the policy, a decision log). The eval gate and spend exceptions are next. The phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
+> chain, tools behind the policy, a decision log), and an
+> [eval gate for model changes](docs/wiki/Model-Evals.md). Spend exceptions are next. The phases are in [PLAN.md](PLAN.md#v2--the-governance-layer-adr-0027),
 > and [ADR 0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) explains the design.
 
 A self-hosted gateway that sits between your applications and LLM providers. Apps talk to
@@ -462,6 +463,7 @@ Each non-obvious choice has an ADR in [docs/decisions/](docs/decisions/):
 | [0027](docs/decisions/0027-governance-layer-on-the-routing-gateway.md) | One gateway: a governance layer on the routing gateway |
 | [0028](docs/decisions/0028-access-policy-data-classes-and-decision-log.md) | Access policy, data classes on the fallback chain, and the decision log |
 | [0029](docs/decisions/0029-identity-oidc-tokens-and-scim-directory.md) | Identity: OIDC tokens, and groups from a SCIM-provisioned directory |
+| [0030](docs/decisions/0030-eval-gate-for-model-changes.md) | An eval gate for model changes: golden tasks, regression against the current model |
 
 ## Development
 

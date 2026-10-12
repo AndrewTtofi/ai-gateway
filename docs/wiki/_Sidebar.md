@@ -17,6 +17,7 @@
 - [Smart routing](Smart-Routing.md)
 - [Response cache](Response-Cache.md)
 - [Quality and safety](Quality-and-Safety.md)
+- [Model evals](Model-Evals.md)
 - [Self-healing](Self-Healing.md)
 
 **Reference**
