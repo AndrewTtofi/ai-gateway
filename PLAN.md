@@ -1,7 +1,9 @@
-# LLM Gateway — Build Plan
+# AI Gateway — Build Plan
 
 An OpenAI-compatible gateway that sits between your apps and LLM providers, adding
 multi-provider routing, fallback, rate limiting, cost tracking and observability.
+Phases 0–12 built that as llm-gateway. From phase 13 it becomes a governed gateway
+([v2](#v2--the-governance-layer-adr-0027)): identity, policy, spend controls and audit.
 
 **Goal:** a portfolio-grade project that teaches the production side of AI engineering
 and becomes the base for later projects (semantic cache, cost autopilot, prompt
@@ -177,8 +179,81 @@ Things that limit real use today. Each item gets tests; non-obvious ones get an 
 - [x] Full security audit of the gateway; fix findings (ADR 0023).
 - [x] Merge the stacked PRs (#10 → #14); release v1.3.0.
 
-### What's next
-See the [roadmap](docs/wiki/Roadmap.md).
+### Phase 12 — Pre-deploy hardening (done)
+- [x] Performance, operations, security and test depth (ADRs 0024–0026).
+
+---
+
+## v2 — the governance layer (ADR 0027)
+
+From here the repo is `ai-gateway`. Every request passes
+**identity → policy → spend → routing/fallback → audit**. The routing gateway above stays
+as it is; these phases add the layer in front of it. One phase per branch, as before.
+
+### Phase 13 — Baseline (`phase-13-governance-baseline`)
+- [x] New repo seeded from llm-gateway's history; project renamed.
+- [x] Tests, ruff and mypy pass before anything else changes.
+- [x] ADR 0027 and this plan.
+
+### Phase 14 — Governance core (`phase-14-governance-core`)
+Needs no accounts. Brings the policy model in before real identity plugs into it.
+- [ ] `config/policy.yaml`: group → role → tier, data classes, model eligibility by
+      retention, connector entitlements, with a version.
+- [ ] A Pydantic schema for the policy file. CI fails on a broken policy, and a test proves it.
+- [ ] One `Principal` for every caller (subject, groups, role, tier, team). API keys resolve
+      to one; existing keys keep working.
+- [ ] Each request declares a data class. Ineligible models are removed from the fallback
+      chain, and the response cache and the judge follow the same rule.
+- [ ] A decision record per request, allow or deny: who, what, data class, reason, policy
+      version, request id. Never content.
+- [ ] `POST /v1/tools/{connector}/{tool}` behind the same policy check, with a mock
+      system-of-record connector.
+
+### Phase 15 — Real identity (`phase-15-identity`)
+The most important phase. Needs an Okta developer tenant, which the owner creates.
+- [ ] A walkthrough for the tenant: an API service app for the gateway's audience, an
+      authorization server, and a SCIM 2.0 provisioning app that points at the gateway.
+- [ ] `make tunnel`: expose the local gateway through a cloudflared tunnel, because the
+      identity provider can't reach localhost.
+- [ ] SCIM 2.0 server, stored in Postgres: users and groups, the `members[value eq "x"]`
+      form of PATCH remove, and error bodies in the SCIM error schema.
+- [ ] OIDC bearer tokens checked against the provider's JWKS (issuer, audience, expiry).
+      Groups come from the provisioned directory, not from token claims.
+- [ ] Tests for create, deactivate and group membership, including "a deactivated user gets 403".
+- [ ] A script that fetches a real client-credentials token and calls `/healthz` and one
+      tool endpoint, to prove the flow end to end.
+
+### Phase 16 — Evals for model changes (`phase-16-evals`)
+Model calls and real token usage already exist (phases 2 and 4).
+- [ ] `evals/run_evals.py`: each golden task goes to the current and the candidate model
+      with the connector tools as tool definitions; real `tool_use` blocks are scored. Exit 1
+      on a regression.
+- [ ] `--offline` uses a deterministic stub, so CI runs without keys.
+- [ ] Three more golden tasks, one of them a prompt-injection case.
+- [ ] The eval gate runs in CI.
+
+### Phase 17 — Short-lived connector credentials (`phase-17-connectors`)
+- [ ] GitHub App auth: sign an app JWT, exchange it for an installation token, cache it
+      until shortly before it expires. A walkthrough for creating the app (read-only pull requests).
+- [ ] Tests with the HTTP calls mocked.
+
+### Phase 18 — Spend exceptions and hardening (`phase-18-spend-exceptions`)
+- [ ] Soft and hard caps per principal, on the existing atomic budget path.
+- [ ] Budget alerts once per threshold per scope per month: already true for keys and
+      teams (ADR 0024); extend to principals.
+- [ ] A spend exception queue: request, then approve or deny by a `platform-admin` group
+      set in policy. Audited.
+- [ ] Request ids in the decision record (structured logs already carry them).
+- [ ] `docker compose up` works end to end, healthcheck passing.
+
+### Phase 19 — Presentation (`phase-19-presentation`)
+- [ ] README: the problem first, the architecture diagram, quickstart, "what's real vs.
+      mocked", a 60-second demo with curl, and "design decisions and trade-offs".
+- [ ] `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, and the user guide.
+- [ ] Make the repo public; release v2.0.0.
+
+### After v2
+See the [roadmap](docs/wiki/Roadmap.md) for the routing gateway's own backlog.
 
 ---
 
