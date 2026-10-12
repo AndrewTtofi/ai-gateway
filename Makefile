@@ -1,4 +1,4 @@
-.PHONY: up down logs idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
+.PHONY: up down logs evals idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
 
 up:
 	docker compose up -d --build
@@ -19,7 +19,7 @@ test-live:
 	pytest -q
 
 lint:
-	ruff check app tests tools && mypy app tools
+	ruff check app tests tools evals && mypy app tools evals
 
 # The dev stack plus an identity provider (authentik) on http://localhost:9000 (ADR 0029).
 IDP = docker compose -f docker-compose.yml -f docker-compose.idp.yml
@@ -34,12 +34,18 @@ idp-down:
 idp-e2e:
 	scripts/identity_e2e.sh
 
+# Compare a candidate model with the current one on the golden tasks (ADR 0030):
+#   make evals current=fast candidate=anthropic/claude-sonnet-5-5 [runs=3]
+# Exit 1 on a regression. Calls real models: costs what the calls cost.
+evals:
+	python -m evals.run_evals --current $(current) --candidate $(candidate) --runs $(or $(runs),1)
+
 # Validate config/policy.yaml against the rest of the config (ADR 0028).
 policy:
 	python -m app.check_policy
 
 fmt:
-	ruff format app tests tools && ruff check --fix app tests tools
+	ruff format app tests tools evals && ruff check --fix app tests tools evals
 
 reload:
 	@sed -n 's/^GATEWAY_ADMIN_KEY=/Authorization: Bearer /p' .env | curl -s -X POST localhost:8000/admin/reload -H @-; echo

@@ -44,9 +44,15 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.14", cache: pip, cache-dependency-path: requirements-dev.txt }
       - run: pip install --require-hashes -r requirements-dev.txt
-      - run: ruff check app tests tools && mypy app tools
+      - run: ruff check app tests tools evals && mypy app tools evals
       - name: the access policy is valid for the shipped config
         run: python -m app.check_policy && GATEWAY_ENABLE_FAKE=1 python -m app.check_policy
+      # Offline: the golden file parses and the harness still catches a regression. It
+      # says nothing about a real model; that is the `evals` workflow (ADR 0030).
+      - name: the eval harness and golden tasks are sound
+        run: |
+          python -m evals.run_evals --offline --current stub/baseline --candidate stub/baseline
+          ! python -m evals.run_evals --offline --current stub/baseline --candidate stub/regressed
       - name: known vulnerabilities in the locked dependencies
         run: pip-audit -r requirements.txt --no-deps --disable-pip --progress-spinner off
       - run: make test
