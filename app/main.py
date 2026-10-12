@@ -38,12 +38,13 @@ from app import (
     guardrails,
     judge,
     messages_api,
+    oidc,
     providers,
     scim,
     services,
 )
 from app.access import DATA_CLASS_HEADER, Principal, principal_for_key
-from app.auth import ApiKey, EffectiveLimits
+from app.auth import KEY_FORMAT, ApiKey, EffectiveLimits
 from app.errors import error_response, routing_error_response
 from app.metering import Meter
 from app.observability import live, metrics
@@ -355,8 +356,14 @@ async def require_key(
     authorization: Annotated[str, Header()] = "", x_api_key: Annotated[str, Header()] = ""
 ) -> ApiKey:
     # OpenAI clients send `Authorization: Bearer`; Anthropic SDKs send `x-api-key`.
+    presented = _bearer(authorization) or x_api_key.strip()
+    # Not a gateway key but shaped like a JWT: a user's token from the identity provider.
+    if not KEY_FORMAT.fullmatch(presented) and presented.count(".") == 2:
+        verifier = services.oidc()
+        if verifier is not None:
+            return await _authenticate_user(presented, verifier)
     try:
-        key = await services.keys.authenticate(_bearer(authorization) or x_api_key.strip())
+        key = await services.keys.authenticate(presented)
     except Exception as exc:  # store down and key not cached recently: fail closed
         # Type only: a DB error's message can include bound parameters (the key hash).
         log.error("API key lookup failed: %s", type(exc).__name__)
@@ -379,6 +386,104 @@ async def require_key(
             },
         )
     return key
+
+
+def _refused(
+    status: int, code: str, message: str, type_: str = "permission_error"
+) -> HTTPException:
+    metrics.rejected.labels(code).inc()
+    headers = {"www-authenticate": f'Bearer error="{code}"'} if status == 401 else None
+    return HTTPException(
+        status, detail={"message": message, "type": type_, "code": code}, headers=headers
+    )
+
+
+async def _authenticate_user(token: str, verifier: oidc.Verifier) -> ApiKey:
+    """A user's OIDC access token → the caller (ADR 0029).
+
+    The token says who. The directory says whether they still exist and are active, and
+    which groups they are in; the policy turns those groups into a tier. All three are
+    read on every request, so deprovisioning doesn't wait for the token to expire."""
+    try:
+        claims = await verifier.verify(token)
+    except oidc.TokenError as exc:
+        raise _refused(401, "invalid_token", str(exc), "invalid_request_error") from None
+    except oidc.KeysUnavailable:
+        raise HTTPException(
+            503,
+            detail={
+                "message": "the identity provider's keys are unavailable",
+                "type": "api_error",
+                "code": "auth_unavailable",
+            },
+        ) from None
+    s = config.settings
+    who = claims.get(s.oidc_user_claim)
+    if not isinstance(who, str) or not who:
+        raise _refused(
+            401,
+            "invalid_token",
+            f"the token has no `{s.oidc_user_claim}` claim",
+            "invalid_request_error",
+        )
+    try:
+        identity = await services.identities.lookup(s.oidc_user_match, who)
+    except Exception as exc:  # directory down: fail closed
+        log.error("directory lookup failed: %s", type(exc).__name__)
+        raise HTTPException(
+            503,
+            detail={
+                "message": "authentication backend unavailable",
+                "type": "api_error",
+                "code": "auth_unavailable",
+            },
+        ) from exc
+    policy = config.access
+
+    def denied(
+        code: str, message: str, subject: str, name: str, groups: tuple[str, ...]
+    ) -> HTTPException:
+        # An identity that authenticated but may not come in is evidence too.
+        principal = Principal(subject, "user", name[:100], groups, policy.roles(groups), "-")
+        decisions.record(principal, "authenticate", "-", "deny", code, message)
+        return _refused(403, code, message)
+
+    if identity is None:
+        raise denied(
+            "user_not_provisioned",
+            "This user has not been provisioned for the gateway.",
+            f"token:{who[:64]}",
+            who,
+            (),
+        )
+    user, groups = identity.user, identity.groups
+    if not user.active:
+        raise denied(
+            "user_deactivated",
+            "This user is deactivated.",
+            f"user:{user.id}",
+            user.user_name,
+            groups,
+        )
+    tier = policy.tier(groups)
+    if tier is None:
+        raise denied(
+            "no_entitlement",
+            "None of this user's groups grants access to the gateway.",
+            f"user:{user.id}",
+            user.user_name,
+            groups,
+        )
+    return ApiKey(
+        id=user.id,
+        name=user.user_name[:100],
+        prefix="user",
+        tier=tier,
+        # A user's spend also counts against the first of their groups that has a team budget.
+        team=next((g for g in groups if g in config.limits.teams), None),
+        kind="user",
+        groups=groups,
+    )
 
 
 def key_limits(key: ApiKey) -> EffectiveLimits:

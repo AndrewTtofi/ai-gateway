@@ -24,6 +24,7 @@ from app.decisions import DecisionSink, MemoryDecisionSink, PostgresDecisionWrit
 from app.directory import CachedIdentities, Directory, MemoryDirectory, PostgresDirectory
 from app.judge import Judge, MemoryScoreStore, PostgresScoreStore
 from app.observability.usage import MemoryUsageSink, PostgresUsageWriter, UsageSink
+from app.oidc import Verifier
 from app.ratelimit import (
     Concurrency,
     Limiter,
@@ -49,6 +50,22 @@ directory: Directory = MemoryDirectory()  # users and groups from the IdP (ADR 0
 identities: CachedIdentities = CachedIdentities(directory)
 alerts: Any = None  # app.routing.selfheal.Alerts, set at startup (breaker and budget alerts)
 _writer: PostgresUsageWriter | None = None
+_verifier: Verifier | None = None
+
+
+def oidc() -> Verifier | None:
+    """The token verifier for the configured identity provider, or None when OIDC is off.
+    Built once, and again if the settings change (it holds the provider's cached keys)."""
+    global _verifier
+    s = config.settings
+    if not (s.oidc_issuer and s.oidc_audience):
+        return None
+    if _verifier is None or (_verifier.issuer, _verifier.audience) != (
+        s.oidc_issuer,
+        s.oidc_audience,
+    ):
+        _verifier = Verifier(s.oidc_issuer, s.oidc_audience, s.oidc_jwks_url)
+    return _verifier
 _decision_writer: PostgresDecisionWriter | None = None
 
 log = logging.getLogger(__name__)

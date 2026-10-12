@@ -15,3 +15,4 @@ httpx2>=2.13  # imported directly (the Anthropic SDK's transport), so pinned dir
 anyio>=4.15
 prometheus-client>=0.26
 structlog>=26.1
+pyjwt[crypto]>=2.15  # verifying OIDC access tokens against the provider's JWKS (ADR 0029)

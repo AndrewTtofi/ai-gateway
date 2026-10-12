@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     # The bearer token the identity provider presents to /scim/v2 (ADR 0029). Empty: SCIM
     # is off. Generate with `openssl rand -hex 32`.
     scim_token: str = ""
+    # OIDC (ADR 0029): users call the gateway with an access token from the identity
+    # provider. Both empty: only gateway API keys are accepted.
+    oidc_issuer: str = ""  # exactly the token's `iss`
+    oidc_audience: str = ""  # the token's `aud` must contain this
+    oidc_jwks_url: str = ""  # empty: taken from the issuer's discovery document
+    # Which claim names the user, and which directory attribute it is matched against.
+    oidc_user_claim: str = "sub"
+    oidc_user_match: Literal["external_id", "user_name"] = "external_id"
     # More operators, one key each: lines of `name sha256-hex-of-key` (ADR 0025).
     admin_keys_file: str = ""
     log_level: str = "INFO"
