@@ -140,7 +140,8 @@ Never prompt text, completions or tool arguments.
 
 Recorded codes: `ok`, `model_not_allowed`, `team_unknown`, `data_class_not_eligible`,
 `budget`, `team_budget`, `prompt_injection_detected`, and for tools `connector_unknown`,
-`tier_too_low`, `tier_unranked`, `role_not_allowed`, `tool_not_exposed`.
+`tier_too_low`, `tier_unranked`, `role_not_allowed`, `tool_not_exposed`, and for spend
+exceptions `not_an_approver`, `self_approval`.
 
 Each record is written twice:
 

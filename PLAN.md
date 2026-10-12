@@ -243,13 +243,15 @@ Model calls and real token usage already exist (phases 2 and 4).
 - [x] A `github` connector (list and get pull requests), onboarded in the policy (ADR 0031).
 
 ### Phase 18 — Spend exceptions and hardening (`phase-18-spend-exceptions`)
-- [ ] Soft and hard caps per principal, on the existing atomic budget path.
-- [ ] Budget alerts once per threshold per scope per month: already true for keys and
-      teams (ADR 0024); extend to principals.
-- [ ] A spend exception queue: request, then approve or deny by a `platform-admin` group
+- [x] Soft and hard caps per principal, on the existing atomic budget path (ADR 0032).
+- [x] Budget alerts once per threshold per scope per month: already true for keys and
+      teams (ADR 0024), and a user is carried as a key; the soft cap alerts the same way.
+- [x] A spend exception queue: request, then approve or deny by a `platform-admin` group
       set in policy. Audited.
-- [ ] Request ids in the decision record (structured logs already carry them).
-- [ ] `docker compose up` works end to end, healthcheck passing.
+- [x] Request ids in the decision record (since phase 14).
+- [x] `docker compose up` works end to end, healthcheck passing.
+- [x] Example teams in `limits.yaml`, so a service key in a team gets a role; the
+      production stack passes the identity and GitHub connector settings.
 
 ### Phase 19 — Presentation (`phase-19-presentation`)
 - [ ] README: the problem first, the architecture diagram, quickstart, "what's real vs.

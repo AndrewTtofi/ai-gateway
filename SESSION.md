@@ -5,31 +5,42 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 17, short-lived connector credentials, done (ADR 0031). Phases 13–16 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-17-connectors`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
+- **Phase:** 18, spend exceptions and hardening, done (ADR 0032). Phases 13–17 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-18-spend-exceptions`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19). Phase pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 781 pass and 42 skip without Redis and Postgres; lint clean.
+  - `make test`: 803 pass and 42 skip without Redis and Postgres; all 845 pass with them; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-  - Verified live on 2026-10-12: the `github` connector against a real GitHub App, on the host, inside the dev container (key mounted read-only) and through `POST /v1/tools/github/...` (engineer allowed; another role and `confidential` data refused).
-  - The local dev database is at migration 0010.
+  - Verified live on the dev stack on 2026-10-12: a key spent to its hard cap, asked for an exception, could not approve it itself, a `platform-admin` key approved it, and the next request was served; the decision log and the admin audit log held each step.
+  - The local dev database is at migration 0011.
 - **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 18, spend exceptions and hardening (`PLAN.md`): soft and hard caps per principal, the exception queue.
+  - Phase 19, presentation (`PLAN.md`): README, `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, the user guide; make the repo public; v2.0.0.
   - A live eval between two hosted models needs provider keys and permission to spend.
 - **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
 - **Open questions:**
   - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
-  - `docker-compose.prod.yml` passes neither the identity settings (OIDC, SCIM) nor the GitHub App's to the gateway yet.
   - The wiki workflow needs the wiki's first page created once in the web UI.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
-  - A key's team only gives it a role if the team is also in `limits.yaml` (`teams:`), and the shipped file has none: service keys can't reach role-limited tools out of the box. The live check of the GitHub tool added two teams temporarily.
   - The GitHub connector uses one installation; several organisations would need one per repository owner.
+  - Approvers learn of a pending spend exception only from the list endpoint; nothing notifies them.
   - This machine has a stale `ghcr.io` login in Docker, which makes public pulls from ghcr fail; `docker logout ghcr.io` clears it.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 21 (spend caps and exceptions)
+**Did**
+- A soft cap per tier: a header, a note in the decision record and one alert.
+- The spend exception queue: request, approve or deny by a policy-named group, never your own; a grant lasts the month. Migration 0011.
+- Example teams in `limits.yaml`, so service keys get roles; the production stack now passes the identity and GitHub settings.
+- Ran the whole flow live on the dev stack.
+
+**Learned**
+- Put the lookup where the rare case is. Grants are read only after a reservation is refused, so the feature costs nothing for everyone under budget and needs no cache invalidation across replicas.
+- A hold is an estimate. Judging the soft cap on the total after the hold flagged the very first request; it has to be judged on spend before it.
+- "Alert once" is a property of the dedupe key, not of the code that notices the crossing: spend goes up with a hold and back down at settlement, so a threshold is crossed many times.
 
 ### 2026-10-12 — Session 20 (GitHub connector)
 **Did**
