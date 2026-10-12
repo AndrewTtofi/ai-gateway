@@ -18,6 +18,9 @@ The interactive OpenAPI docs are at `http://localhost:8000/docs`.
 | POST | `/v1/messages` | Anthropic Messages API, streaming or not |
 | POST | `/v1/messages/count_tokens` | The gateway's input-token estimate (counts as one request against the key's limit) |
 | POST | `/v1/tools/{connector}/{tool}` | Call a connector's tool: `{args}`. Behind the access policy; counts as one request ([Governance](Governance.md#tools)) |
+| POST | `/v1/spend/exceptions` | Ask for more budget this month: `{amount_usd, reason}` ([Budgets](Keys-Limits-and-Budgets.md#spend-exceptions)) |
+| GET | `/v1/spend/exceptions` | Your requests; approvers see everyone's. `?status=pending\|approved\|denied` |
+| POST | `/v1/spend/exceptions/{id}/approve`, `/deny` | Decide a pending request (approver groups only): `{amount_usd?, note?}` |
 | GET | `/v1/models` | Aliases (with their chains) and direct models this key may use |
 | GET | `/v1/catalog` | Price, capabilities, quality, breaker state and live stats per model this key may use; `?capability=`, `?min_context=`, `?sort=price\|quality\|ttft\|latency` ([Choosing models](Choosing-Models.md)); counts as one request |
 | * | `/scim/v2/Users`, `/scim/v2/Groups` | SCIM 2.0, for the identity provider; its own bearer token ([Identity](Identity.md#the-scim-server)) |
@@ -65,6 +68,7 @@ This is the standard Anthropic request (`model`, `max_tokens`, `messages`, `syst
 | `retry-after` | 429 | Seconds until both buckets have room |
 | `server-timing: admit;dur=…` | admitted | Milliseconds the gateway spent on auth, budget and limits |
 | `x-gateway-data-class` | admitted | The data class that was applied, default included |
+| `x-gateway-budget` | past the soft cap | `soft-cap-exceeded`: the caller's spend this month is past its tier's soft cap ([Budgets](Keys-Limits-and-Budgets.md#soft-cap-and-hard-cap)) |
 | `x-gateway-excluded` | targets were removed | How many targets of the chain may not hold this data class |
 | `x-gateway-route` | policy aliases | `optimize=…; considered=…; chain=…` ([Smart routing](Smart-Routing.md)) |
 | `x-gateway-variant` | A/B aliases | The arm this request was assigned to |

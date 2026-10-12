@@ -226,6 +226,65 @@ Set `output_tokens_per_second: 0` to bill only what was relayed.
 - **Measured overshoot:** with 50 concurrent streams racing for the last dollar, +0.9%
   (about 0.8 requests). It was +3.4% before holds became atomic.
 
+### Soft cap and hard cap
+
+`monthly_budget_usd` is the hard cap: past it requests are refused. A tier can also set a
+soft cap below it ([ADR 0032](../decisions/0032-soft-caps-and-spend-exceptions.md)):
+
+```yaml
+tiers:
+  standard:
+    monthly_budget_usd: 100   # refuse past this
+    soft_budget_usd: 80       # warn past this
+```
+
+Past the soft cap requests still run. The response carries
+`x-gateway-budget: soft-cap-exceeded`, the decision record notes it, and one alert goes
+out per caller and month.
+
+### Spend exceptions
+
+At the hard cap, the 429 says how to ask for more:
+
+```bash
+# the caller asks (anyone may; one pending request per caller and month)
+curl localhost:8000/v1/spend/exceptions -H "Authorization: Bearer $GW_KEY" \
+  -H 'content-type: application/json' \
+  -d '{"amount_usd": 50, "reason": "quarter-end report run"}'
+
+# an approver looks at the queue, then approves (all of it, or less) or denies
+curl 'localhost:8000/v1/spend/exceptions?status=pending' -H "Authorization: Bearer $APPROVER"
+curl -X POST localhost:8000/v1/spend/exceptions/$ID/approve -H "Authorization: Bearer $APPROVER" \
+  -H 'content-type: application/json' -d '{"amount_usd": 30, "note": "until the 31st"}'
+curl -X POST localhost:8000/v1/spend/exceptions/$ID/deny -H "Authorization: Bearer $APPROVER"
+```
+
+Who approves is in `config/policy.yaml`:
+
+```yaml
+spend_exceptions:
+  approver_groups: [platform-admin]   # empty: nobody can approve
+  max_usd: 500                        # the most one request may ask for
+```
+
+- An approver is a user in one of those groups (or a key whose team is one). Nobody
+  decides their own request.
+- An approved amount is added to that caller's budget for that month only. It applies to
+  the caller's own budget, not to a team's.
+- It takes effect at once on the replica that handled the approval and within ten seconds
+  on the others.
+- The request, refused attempts to decide, and the decision are in the decision log
+  (`spend_exception:request`, `:approve`, `:deny`); decisions are also in the admin audit
+  log. The reason is stored with the request and in neither log.
+
+| Response | Meaning |
+|----------|---------|
+| `400 amount_too_large` | More than the policy's `max_usd`, or an approval above what was asked |
+| `409 exception_pending` | The caller already has a pending request this month |
+| `403 not_an_approver` | The caller isn't in an approver group |
+| `403 self_approval` | Approvers can't decide their own request |
+| `409 already_decided` | Someone else decided it first |
+
 ### Budget alerts
 
 Apps shouldn't find out from a `429` that a budget ran out. When a key or a team reaches

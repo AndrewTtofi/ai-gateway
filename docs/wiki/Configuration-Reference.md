@@ -208,8 +208,8 @@ Patterns must compile; names are short lower-case slugs.
 
 ## `config/policy.yaml`
 
-The access policy: group → role → tier, data classes, a data-handling rule per model, and
-connector entitlements. Required. See [Governance](Governance.md). `make policy` validates
+The access policy: group → role → tier, data classes, a data-handling rule per model,
+connector entitlements, and who approves spend exceptions. Required. See [Governance](Governance.md). `make policy` validates
 it against the other files.
 
 ## Reloading

@@ -9,6 +9,15 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (spend caps and exceptions, ADR 0032)
+- **Soft cap:** `soft_budget_usd` per tier. Past it requests still run, with `x-gateway-budget: soft-cap-exceeded`, a note in the decision record and one alert per caller and month.
+- **Spend exception queue:** `POST /v1/spend/exceptions` to ask for more budget this month; `GET` to list; `POST …/{id}/approve` and `…/{id}/deny` for members of the policy's `spend_exceptions.approver_groups`, never for their own request. An approved amount raises that caller's budget for that month only (migration 0011). Every step is a decision record; decisions are also in the admin audit log.
+- The 429 at the hard cap says how to ask for more.
+- **Example teams** in `config/limits.yaml` matching the policy's groups, and a `platform-admin` group and role in `config/policy.yaml`.
+
+### Changed
+- `docker-compose.prod.yml` passes the identity settings (`OIDC_*`, `SCIM_TOKEN`) and the GitHub connector's to the gateway; `.env.prod.example` documents them.
+
 ### Added (GitHub connector, ADR 0031)
 - **`github` connector:** `list_pull_requests` and `get_pull_request` through `POST /v1/tools/github/{tool}`, for the `engineer` role with data up to `internal`.
 - **Short-lived credentials from a GitHub App:** the gateway signs a JWT with the app's private key and exchanges it for a one-hour installation token, requested with only `pull_requests: read` and kept in memory until five minutes before it expires. No GitHub token is stored. `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE`, and optionally `GITHUB_API_URL`.
