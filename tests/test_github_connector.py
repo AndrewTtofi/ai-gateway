@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
 
 from app import config, connectors
-from app.connectors import ConnectorError, ConnectorNotConfigured, GitHub
+from app.connectors import BadArguments, ConnectorError, ConnectorNotConfigured, GitHub
 from tests.test_governance import STRICT, decided, team_key, tool
 
 API = "https://github.test"
@@ -271,7 +271,7 @@ async def test_one_pull_request_with_a_bounded_description(github: GitHub) -> No
 async def test_bad_arguments_never_reach_github(
     github: GitHub, tool_name: str, args: dict[str, Any]
 ) -> None:
-    with pytest.raises(ConnectorError):
+    with pytest.raises(BadArguments):
         await github.call(tool_name, args, "ghs_first")
     assert not respx.calls
 
@@ -357,6 +357,14 @@ def test_an_unconfigured_connector_is_a_503(
     resp = tool(client, team_key("eng"), "github", "list_pull_requests", repo="acme/api")
     assert resp.status_code == 503
     assert resp.json()["error"]["code"] == "connector_not_configured"
+
+
+@respx.mock
+def test_bad_arguments_are_the_callers_error(client: TestClient, onboarded: None) -> None:
+    respx.post(TOKENS).mock(return_value=issued())
+    resp = tool(client, team_key("eng"), "github", "list_pull_requests", repo="../user")
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "invalid_tool_arguments"
 
 
 def test_the_shipped_policy_onboards_github_for_engineers_only() -> None:
