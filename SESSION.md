@@ -5,16 +5,15 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 19, presentation, done except the release: the repo is still private and v2.0.0 is not tagged. Phases 13–18 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Phase:** 19, presentation, done; v2.0.0 released. Phases 13–18 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
 - **Branch:** `phase-19-presentation`. Remote `github.com/AndrewTtofi/ai-gateway`. Phase pull requests are rebase-merged once CI is green.
 - **Status:**
   - `make test`: 798 pass and 47 skip without Redis and Postgres; all 845 pass with them; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
   - Every command in the README's demo and in `docs/demo.md` was run against the dev stack on 2026-10-12, and the runbook's SQL against its database.
   - The local dev database is at migration 0011.
-- **Released:** nothing from this repo yet. llm-gateway's last release was v1.3.1.
+- **Released:** v2.0.0 (2026-10-12), the first release from this repo: image `ghcr.io/andrewttofi/ai-gateway`. Releases up to v1.3.1 are llm-gateway's.
 - **Next up:**
-  - Owner's go-ahead, then: make the repo public, move `[Unreleased]` to `[2.0.0]` in the changelog, tag `v2.0.0` (the release workflow builds and publishes the image).
   - A live eval between two hosted models needs provider keys and permission to spend.
 - **Blockers:** none.
 - **Open questions:**

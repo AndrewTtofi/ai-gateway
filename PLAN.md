@@ -259,7 +259,7 @@ Model calls and real token usage already exist (phases 2 and 4).
 - [x] `docs/demo.md`, `docs/architecture.md`, `docs/runbook.md`, and
       `docs/enablement/`: one capability explained for three audiences.
 - [x] The wiki brought up to date with the governance layer.
-- [ ] Make the repo public; release v2.0.0.
+- [x] Make the repo public; release v2.0.0.
 
 ### After v2
 See the [roadmap](docs/wiki/Roadmap.md) for the routing gateway's own backlog.
