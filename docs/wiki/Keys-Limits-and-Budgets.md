@@ -295,7 +295,7 @@ sends an alert:
 - as a log line, and as `gateway_budget_alerts_total{level}`.
 
 ```json
-{"text": "⚠️ LLM gateway: key gw_abc12 (support-bot) has used 80% of its 2026-10 budget ($80.12 of $100.00)",
+{"text": "⚠️ AI gateway: key gw_abc12 (support-bot) has reached 80% of its 2026-10 budget ($80.12 of $100.00)",
  "kind": "budget", "who": "key gw_abc12 (support-bot)", "level": 80, "spent_usd": 80.12, "budget_usd": 100}
 ```
 

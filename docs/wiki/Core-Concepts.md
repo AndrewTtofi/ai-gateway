@@ -114,3 +114,25 @@ Every upstream failure is classified before the gateway decides what to do:
   backoff, then fall back.
 
 Details in [Routing and reliability](Routing-and-Reliability.md).
+
+## Governance vocabulary
+
+- **Principal:** the caller as the policy sees them, whether a person with a token or a
+  service with a key: a subject, groups, roles and a tier.
+- **Group → role → tier:** groups come from the identity provider. The policy maps a
+  group to a role (what you may do) and a role to a tier (how much: limits, budget,
+  aliases).
+- **Data class:** how sensitive a request's content is (`public`, `internal`,
+  `confidential`, `restricted`), declared in the `x-gateway-data-class` header. Each
+  model and each tool has a ceiling.
+- **Eligible chain:** an alias's chain after removing the models that may not hold the
+  request's data class. Fallback only happens inside it.
+- **Connector, tool:** a connector is one external system; its tools are the few things
+  an assistant may do there.
+- **Decision record:** one row per decision, allowed or denied: who, what, the data
+  class, the reason and the policy version. Never content.
+- **Soft cap, hard cap:** past the soft cap requests run and the caller is warned; past
+  the hard cap they are refused.
+- **Spend exception:** a request for more budget this month, approved by someone else.
+
+[Governance](Governance.md) and [Identity](Identity.md) explain each.

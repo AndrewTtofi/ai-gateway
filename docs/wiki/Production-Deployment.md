@@ -9,20 +9,20 @@ every piece working together.
 
 Pushing a `v*` tag runs `.github/workflows/release.yml`:
 - it builds the gateway for **amd64 and arm64**;
-- it pushes the image to `ghcr.io/andrewttofi/llm-gateway` with tags `1.3.1`, `1.3` and the
-  commit SHA;
+- it pushes the image to `ghcr.io/andrewttofi/ai-gateway` with tags such as `2.0.0`, `2.0` and
+  the commit SHA;
 - it attaches an **SBOM** and **build provenance**, and signs an attestation with GitHub's
   OIDC identity.
 
 Before pushing, the workflow scans the amd64 build with Trivy (HIGH and CRITICAL, fixable).
 If the scan fails, nothing is published. The workflow runs only GitHub-owned actions, because the repository allows no third-party
-ones. Docker steps use the `docker` CLI and `buildx` on the runner. v1.3.0 has no image:
-its release run was refused for using third-party actions. Use 1.3.1 or later.
+ones. Docker steps use the `docker` CLI and `buildx` on the runner. Releases before 2.0.0
+belong to the routing-only project and are published as `ghcr.io/andrewttofi/llm-gateway`.
 
 Verify an image before running it:
 
 ```bash
-gh attestation verify oci://ghcr.io/andrewttofi/llm-gateway:1.3.1 --owner AndrewTtofi
+gh attestation verify oci://ghcr.io/andrewttofi/ai-gateway:2.0.0 --owner AndrewTtofi
 ```
 
 ## `docker-compose.prod.yml`
@@ -46,12 +46,27 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod --profile monitor
 | `gateway` ×2 | The release image. Read-only filesystem, all capabilities dropped, `no-new-privileges`. Graceful shutdown waits 30 s for open streams, inside a 45 s stop grace period. API docs off (`DOCS_ENABLED=false`): the schema would list the admin API |
 | `redis` | Rate limits, budgets, breakers. Password from a config file (not visible in `ps`), append-only persistence |
 | `redis-cache` | The response cache only: capped at `CACHE_MAXMEMORY` (512 MB) with LRU eviction, no persistence. Clients decide how fast a cache grows, so it's kept away from limits and budgets (ADR 0023) |
-| `postgres` | Keys, usage log, judge scores |
+| `postgres` | Keys, the directory (users and groups), the decision log, usage log, admin audit log, spend exceptions, judge scores |
 | `prune-usage` | Deletes `usage_log` rows older than `USAGE_RETENTION_DAYS` (default 90) every day. Gets only the database URL |
 | `backup` | Daily `pg_dump` (custom format) into the `pg-backups` volume, kept `BACKUP_KEEP_DAYS` (14). Gets only the database password. Restore and restore drill: [Runbooks](Runbooks.md#backups) |
 | `alertmanager` *(monitoring)* | Sends Prometheus alerts to `ALERTMANAGER_SLACK_URL` (Slack-compatible webhook), each with a link to its [runbook](Runbooks.md). Without a URL, alerts are only on its own page, `127.0.0.1:9093` |
 | `prometheus` *(monitoring)* | Scrapes every replica's `:9100` by DNS discovery; loads the SLO and alert rules |
 | `grafana` *(monitoring)* | On `127.0.0.1:3000` only, sign-up off. It reads Postgres as `grafana_ro`, which can read `usage_log`, `judge_scores` and every `api_keys` column **except `key_hash`** |
+
+### Identity and connectors
+
+Set these in `.env.prod` ([Identity](Identity.md), [Connectors](Connectors.md)); all are
+optional, and empty means the feature is off:
+
+| Variable | For |
+|----------|-----|
+| `OIDC_ISSUER`, `OIDC_AUDIENCE` (and optionally `OIDC_JWKS_URL`, `OIDC_USER_CLAIM`, `OIDC_USER_MATCH`) | Accepting access tokens from your identity provider |
+| `SCIM_TOKEN` | The bearer token your identity provider presents to `https://<domain>/scim/v2` |
+| `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE` | The GitHub connector. The key file is a path on the host, mounted read-only; it must be readable by uid 1000 |
+
+`/scim/v2` is on the public site, because the identity provider calls it from outside. It
+accepts only its own token. If your provider publishes its egress addresses, allow only
+those at the firewall or in the Caddyfile.
 
 **Secrets:** each container gets only the variables it needs. The gateway never sees
 Grafana's passwords; `migrate` and `prune-usage` never see provider keys or the admin key.
