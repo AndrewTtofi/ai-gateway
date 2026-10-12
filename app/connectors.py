@@ -20,6 +20,9 @@ class ConnectorError(Exception):
 class Connector(Protocol):
     name: str
     tools: frozenset[str]
+    # What each tool is for and the arguments it takes (a JSON Schema): what a model is
+    # shown when the tool is offered to it.
+    schemas: dict[str, dict[str, Any]]
 
     async def credential(self) -> str: ...
 
@@ -32,6 +35,19 @@ class MockRecords:
 
     name = "mock_records"
     tools = frozenset({"lookup_case"})
+    schemas = {
+        "lookup_case": {
+            "description": "Look up a case in the case-management system by its id. "
+            "Returns its status and owning team.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "case_id": {"type": "string", "description": "The case id, e.g. C-1001"}
+                },
+                "required": ["case_id"],
+            },
+        }
+    }
     _cases = {"C-1001": {"status": "open", "owner": "compliance"}}
 
     async def credential(self) -> str:
@@ -45,3 +61,29 @@ class MockRecords:
 
 
 REGISTRY: dict[str, Connector] = {c.name: c for c in (MockRecords(),)}
+
+
+TOOL_SEPARATOR = "__"  # function names can't contain a dot: mock_records__lookup_case
+
+
+def tool_definitions() -> list[dict[str, Any]]:
+    """Every registered tool as an OpenAI-format function definition, for offering the
+    gateway's tools to a model (the eval harness does)."""
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": f"{connector.name}{TOOL_SEPARATOR}{tool}",
+                "description": connector.schemas[tool]["description"],
+                "parameters": connector.schemas[tool]["parameters"],
+            },
+        }
+        for connector in REGISTRY.values()
+        for tool in sorted(connector.tools)
+    ]
+
+
+def tool_id(function_name: str) -> str:
+    """A model's function name back to `connector.tool`."""
+    connector, _, tool = function_name.partition(TOOL_SEPARATOR)
+    return f"{connector}.{tool}" if tool else function_name
