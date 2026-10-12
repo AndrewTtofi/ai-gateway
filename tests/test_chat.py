@@ -294,3 +294,35 @@ def test_provider_without_its_key_falls_back_without_a_call(
     resp = client.post("/v1/chat/completions", json={"model": "mock-then-ok", "messages": MSGS})
     assert resp.status_code == 200 and resp.headers["x-gateway-provider"] == "chaos/ok"
     assert not route.called  # no request sent with missing credentials
+
+
+@pytest.mark.parametrize(
+    "part",
+    [
+        {"type": "text", "text": None},
+        {"type": "text"},
+        {"type": "text", "text": 7},
+        {"type": "image_url", "text": 1.0},  # `text` on any part is read as a string
+    ],
+)
+@pytest.mark.parametrize("role", ["system", "user", "assistant"])
+def test_a_text_part_without_string_text_is_a_400(
+    client: TestClient, part: dict[str, Any], role: str
+) -> None:
+    """Found by the fuzzer: these used to reach the injection scan and the provider
+    translation, which read `text` as a string, and came back as a 500."""
+    resp = client.post(
+        "/v1/chat/completions",
+        json={"model": "local", "messages": [{"role": role, "content": [part]}]},
+    )
+    assert resp.status_code == 400
+    assert "`text` must be a string" in resp.json()["error"]["message"]
+    anthropic = client.post(
+        "/v1/messages",
+        json={
+            "model": "local",
+            "max_tokens": 10,
+            "messages": [{"role": "user", "content": [{"type": "text", "text": None}]}],
+        },
+    )
+    assert anthropic.status_code == 400
