@@ -5,38 +5,40 @@ identity → policy → spend → routing/fallback → audit.
 
 Phases 0–12 built the routing half as llm-gateway: one endpoint between your apps and LLM
 providers, with multi-provider routing, fallback, rate limiting, cost tracking and
-observability. Phases 13–19 add the governance layer
-([v2](#v2--the-governance-layer-adr-0027)).
+observability. Phases 13–19 added the governance layer
+([v2](#v2--the-governance-layer-adr-0027)), released as v2.0.0.
 
-**Goal:** a portfolio-grade project that teaches the production side of AI engineering
-and becomes the base for later projects (semantic cache, cost autopilot, prompt
-injection filter, A/B routing).
-
-**Owner:** Andreas · **Started:** 2026-10-05 · **Target:** ~4 weeks part-time
+**Owner:** Andreas · **Started:** 2026-10-05
 
 ---
 
 ## Architecture
 
 ```
- client (any OpenAI SDK)
-        │  POST /v1/chat/completions   Authorization: Bearer gw_xxx
-        ▼
- ┌──────────────────────── gateway (FastAPI) ────────────────────────┐
- │ auth → rate limiter → router → provider adapter → response mapper │
- │          │              │            │                            │
- │        Redis      models.yaml   anthropic / openai / ollama       │
- │                   (aliases,     (+ circuit breaker per provider)  │
- │                    fallbacks)                                     │
- │                                         │                         │
- │                    usage logger ────────┴──► Postgres             │
- │                    /metrics ───────────────► Prometheus → Grafana │
- └───────────────────────────────────────────────────────────────────┘
+ people (OIDC token)          services (gateway API key)
+            │                          │
+            ▼                          ▼
+ ┌──────────────────────────── gateway (FastAPI) ────────────────────────────┐
+ │ 1 identity → 2 policy → 3 spend → 4 routing → 5 audit                     │
+ │   OIDC, SCIM   roles, tiers,  limits, soft    eligible chain,   decision  │
+ │   directory    data classes   and hard caps   retries, breakers and usage │
+ └────────┬───────────────┬──────────────┬─────────────────┬─────────────────┘
+          │               │              │                 │
+     identity          tools:          Redis            models:
+     provider      GitHub, external  (buckets,     Anthropic, OpenAI,
+      (SCIM)        tool servers      spend)        others, local
+                                         Postgres: directory, keys, decisions, usage
 ```
 
-Key design rule: **nothing model-specific is hard-coded.** Every model, alias,
-fallback chain and price lives in `config/`. Changing models = editing YAML.
-See `docs/CHANGING-MODELS.md`.
+Key design rules:
+
+- **Nothing model-specific is hard-coded.** Every model, alias, fallback chain and price
+  lives in `config/`. See `docs/CHANGING-MODELS.md`.
+- **Who may do what is one reviewed file,** `config/policy.yaml`, and every decision is
+  recorded with its version.
+- **Records never hold content.**
+
+[docs/architecture.md](docs/architecture.md) has the full picture.
 
 ---
 
@@ -261,8 +263,13 @@ Model calls and real token usage already exist (phases 2 and 4).
 - [x] The wiki brought up to date with the governance layer.
 - [x] Make the repo public; release v2.0.0.
 
-### After v2
-See the [roadmap](docs/wiki/Roadmap.md) for the routing gateway's own backlog.
+### Phase 20 — Decisions for external tool servers (`feat-delegated-decisions`)
+- [x] `POST /v1/authorize`: a tool server asks whether a user may use a tool (ADR 0033).
+- [x] `external: true` connectors in the policy, and the groups that may ask.
+- [x] Every document in the repo brought up to date with the governance layer.
+
+### After that
+See the [roadmap](docs/wiki/Roadmap.md).
 
 ---
 

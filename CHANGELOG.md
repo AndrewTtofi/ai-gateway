@@ -9,6 +9,16 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-10-13 (Phase 20: decisions for external tool servers)
+
+### Added (ADR 0033)
+- **`POST /v1/authorize`:** a tool server that runs outside the gateway asks whether a user may use one of its tools with a class of data. The user is resolved from the directory, the decision is the existing connector check, and it is recorded under the user's name with the asking server in the detail.
+- **Policy:** `external: true` and `tools:` on a connector; `delegated_decisions.client_groups` names the services that may ask. The shipped policy has an `atlassian` external connector and an `mcp-servers` group.
+
+### Changed
+- **Documentation:** every page that predated the governance layer now covers it: routing (the chain is filtered by data class), the response cache and judge (the secondary-use ceiling), observability (decisions), operations, testing, the configuration reference, the multi-app walkthrough, contributing, security, the plan and the roadmap.
+- The Grafana dashboard is titled **AI Gateway** (its id is unchanged, so links keep working).
+
 ## [2.0.0] - 2026-10-12 (Phases 13–19: the governance layer)
 
 The first release as `ai-gateway`. Every request passes identity → policy → spend →

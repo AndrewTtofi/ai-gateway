@@ -5,28 +5,32 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 19, presentation, done; v2.0.0 released. Phases 13–18 are merged to `main`. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
-- **Branch:** `phase-19-presentation`. Remote `github.com/AndrewTtofi/ai-gateway`. Phase pull requests are rebase-merged once CI is green.
+- **Phase:** 20, decisions for external tool servers, done (ADR 0033). v2.1.0.
+- **Branch:** `feat-delegated-decisions`. Remote `github.com/AndrewTtofi/ai-gateway` (public). Pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 798 pass and 47 skip without Redis and Postgres; all 845 pass with them; lint clean.
+  - `make test`: 814 pass and 47 skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-  - Every command in the README's demo and in `docs/demo.md` was run against the dev stack on 2026-10-12, and the runbook's SQL against its database.
-  - The local dev database is at migration 0011.
-- **Released:** v2.0.0 (2026-10-12), the first release from this repo: image `ghcr.io/andrewttofi/ai-gateway`. Releases up to v1.3.1 are llm-gateway's.
-- **Next up:**
-  - A live eval between two hosted models needs provider keys and permission to spend.
+- **Released:** v2.0.0 (2026-10-12). v2.1.0 is tagged after this branch merges.
+- **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, approver notifications, decision-log retention.
 - **Blockers:** none.
 - **Open questions:**
-  - The wiki workflow needs the wiki's first page created once in the web UI.
+  - The wiki workflow publishes on merge; relative links to files outside the wiki don't resolve on the Wiki tab.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
-  - The GitHub connector uses one installation; several organisations would need one per repository owner.
-  - Approvers learn of a pending spend exception only from the list endpoint; nothing notifies them.
-  - Decision records have no retention job; usage rows do.
+  - `/v1/authorize` and the MCP server that uses it are each tested alone; they have not been run together against a live Atlassian site.
 
 ---
 
 ## Session log
+
+### 2026-10-13 — Session 23 (external tool servers, documentation sweep)
+**Did**
+- `POST /v1/authorize`, external connectors and decision clients in the policy, for an MCP server that acts as each user.
+- Brought every document that predated the governance layer up to date.
+
+**Learned**
+- A resource server must not pass a user's token on, so "integrate with the gateway" can't mean "forward the header". The server asks a question with its own credential instead, and the gateway answers from its own directory.
+- A refusal is a decision, not an error: 200 with `allowed: false` keeps the asker's error handling for the cases that are its own fault.
 
 ### 2026-10-12 — Session 22 (presentation)
 **Did**
