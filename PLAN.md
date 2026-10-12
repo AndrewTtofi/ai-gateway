@@ -200,16 +200,16 @@ as it is; these phases add the layer in front of it. One phase per branch, as be
 
 ### Phase 14 — Governance core (`phase-14-governance-core`)
 Needs no accounts. Brings the policy model in before real identity plugs into it.
-- [ ] `config/policy.yaml`: group → role → tier, data classes, model eligibility by
+- [x] `config/policy.yaml`: group → role → tier, data classes, model eligibility by
       retention, connector entitlements, with a version.
-- [ ] A Pydantic schema for the policy file. CI fails on a broken policy, and a test proves it.
-- [ ] One `Principal` for every caller (subject, groups, role, tier, team). API keys resolve
+- [x] A Pydantic schema for the policy file. CI fails on a broken policy, and a test proves it.
+- [x] One `Principal` for every caller (subject, groups, role, tier, team). API keys resolve
       to one; existing keys keep working.
-- [ ] Each request declares a data class. Ineligible models are removed from the fallback
+- [x] Each request declares a data class. Ineligible models are removed from the fallback
       chain, and the response cache and the judge follow the same rule.
-- [ ] A decision record per request, allow or deny: who, what, data class, reason, policy
+- [x] A decision record per request, allow or deny: who, what, data class, reason, policy
       version, request id. Never content.
-- [ ] `POST /v1/tools/{connector}/{tool}` behind the same policy check, with a mock
+- [x] `POST /v1/tools/{connector}/{tool}` behind the same policy check, with a mock
       system-of-record connector.
 
 ### Phase 15 — Real identity (`phase-15-identity`)

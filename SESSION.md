@@ -5,26 +5,37 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 13, governance baseline, done (ADR 0027). This repo is now `ai-gateway`, seeded from llm-gateway v1.3.1 plus the hardening. llm-gateway itself is left untouched.
-- **Branch:** `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
+- **Phase:** 14, governance core, done (ADR 0028): access policy, data classes on the fallback chain, tools behind the policy, the decision log. This repo is `ai-gateway`, seeded from llm-gateway; llm-gateway itself is left untouched.
+- **Branch:** `phase-14-governance-core`, stacked on `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
 - **Status:**
-  - `make test`: 589 pass and 37 skip locally without Redis and Postgres (CI runs them all); lint clean.
-  - CI runs: tests with fuzzing, pip-audit, a Trivy image scan, and an end-to-end job on the production compose stack.
-  - A 60-minute soak: 259 511 requests, 100% success, memory flat.
-  - Dev DB migrated to 0008.
-- **Merged:** #10 → #18 are on `main`, and #19 (hardening) merges this session. The wiki is synced by the `wiki` workflow.
-- **Released:** v1.3.0 (phases 8–10, the security audit and two review rounds), then **v1.3.1**, the same code with a release workflow that only uses GitHub-owned actions (v1.3.0's image build was refused by the repo's Actions policy).
+  - `make test`: 650 pass and 39 skip locally without Redis and Postgres (CI runs them all); lint clean.
+  - CI runs: tests with fuzzing, the policy check, pip-audit, a Trivy image scan, and an end-to-end job on the production compose stack.
+  - Migration 0009 (`decision_log`) is new; no dev database has it yet.
+- **Released:** nothing from this repo. llm-gateway's last release was v1.3.1.
 - **Next up:**
-  - Phase 14, governance core (`PLAN.md`): policy file and schema, `Principal`, data classes on the fallback chain, decision records, the tool endpoint with a mock connector. Needs no accounts.
-  - Phase 15 needs an Okta developer tenant from the owner.
-- **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
+  - Phase 15, real identity (`PLAN.md`): SCIM server, OIDC tokens, groups from the directory. Needs an Okta developer tenant from the owner.
+- **Blockers:** phase 15 needs the Okta tenant. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
 - **Open questions:**
   - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
   - The wiki workflow needs the wiki's first page created once in the web UI.
+  - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 17 (governance core)
+**Did**
+- `config/policy.yaml` with a Pydantic schema, cross-checked against the rest of the config; CI validates it.
+- `Principal`: policy and audit see a subject with groups, roles, tier and team. API keys resolve to one.
+- Data classes: declared per request, applied to the fallback chain before routing, and to the cache and judge.
+- `POST /v1/tools/{connector}/{tool}` with a mock connector.
+- Decision log: `decision_log` (migration 0009), the audit log line, `/admin/decisions`.
+- 61 new tests.
+
+**Learned**
+- Checking only the first model of a chain is not enough: the request that matters is the one that falls back. Filtering the chain makes the eligible model's outage an error instead of a leak.
+- Requiring a data-handling rule for every routable model turns "what does this vendor retain?" into a question CI asks at model turn-up.
 
 ### 2026-10-12 — Session 16 (governance baseline)
 **Did**
