@@ -138,7 +138,7 @@ disk doesn't survive losing the disk.
 
 ```bash
 dc exec backup ls -l /backups                       # dumps, newest last
-docker run --rm -v llm-gateway_pg-backups:/b alpine tar -C /b -cf - . > backups.tar   # copy off-host
+docker run --rm -v ai-gateway_pg-backups:/b alpine tar -C /b -cf - . > backups.tar   # copy off-host
 ```
 
 ## Restore from a backup

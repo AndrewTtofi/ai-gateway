@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please **don't open a public issue** for security problems. Report them privately via
-[GitHub's private vulnerability reporting](https://github.com/AndrewTtofi/llm-gateway/security/advisories/new).
+[GitHub's private vulnerability reporting](https://github.com/AndrewTtofi/ai-gateway/security/advisories/new).
 
 Include what you found, how to reproduce it, and the impact you expect. You'll get an
 acknowledgement within a few days. This is a personal project, so there's no bounty.

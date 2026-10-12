@@ -1,7 +1,7 @@
 # Roadmap
 
 Where the gateway goes after v1.3.0. Phases 0–11 are done (see `PLAN.md` and the
-[CHANGELOG](https://github.com/AndrewTtofi/llm-gateway/blob/main/CHANGELOG.md)). This page is
+[CHANGELOG](https://github.com/AndrewTtofi/ai-gateway/blob/main/CHANGELOG.md)). This page is
 a plan, not a promise. Items come from gaps found while building and auditing the gateway:
 - decisions deferred in the ADRs;
 - requests the gateway still rejects;

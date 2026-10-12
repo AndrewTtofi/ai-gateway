@@ -52,13 +52,13 @@ readers who are new to them.
 ## Design records
 
 Every non-obvious decision has an ADR in
-[`docs/decisions/`](https://github.com/AndrewTtofi/llm-gateway/tree/main/docs/decisions).
+[`docs/decisions/`](https://github.com/AndrewTtofi/ai-gateway/tree/main/docs/decisions).
 Each wiki page links to the ADRs behind it.
 
 ## Keeping the wiki in sync
 
 The wiki's source lives in the main repo under
-[`docs/wiki/`](https://github.com/AndrewTtofi/llm-gateway/tree/main/docs/wiki), so it is
+[`docs/wiki/`](https://github.com/AndrewTtofi/ai-gateway/tree/main/docs/wiki), so it is
 reviewed in the same pull requests as the code it describes. After every merge to `main`
 that changes it, the `wiki` workflow publishes it to the GitHub Wiki tab
 (`scripts/publish_wiki.sh`). Edit the files in `docs/wiki/`, not the Wiki tab: edits made

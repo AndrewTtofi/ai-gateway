@@ -134,7 +134,7 @@ Chat traffic keeps flowing in both cases. [RESULTS.md](docs/RESULTS.md) has the 
 You need Docker with Compose. [Ollama](https://ollama.com) is optional and gives you a free local model.
 
 ```bash
-git clone https://github.com/AndrewTtofi/llm-gateway.git && cd llm-gateway
+git clone https://github.com/AndrewTtofi/ai-gateway.git && cd ai-gateway
 cp .env.example .env            # add ANTHROPIC_API_KEY / OPENAI_API_KEY and an admin key
 ollama pull llama3.2:3b         # optional: local model, also the last fallback
 make up                         # gateway, Redis, Postgres, Prometheus, Grafana

@@ -152,7 +152,7 @@ class Alerts:
         if not url or not await self._first_to_send(target, after):
             return
         icon = {"open": "🔴", "half_open": "🟡", "closed": "🟢"}.get(after, "⚪")
-        text = f"{icon} LLM gateway: {target} circuit {before} → {after}"
+        text = f"{icon} AI gateway: {target} circuit {before} → {after}"
         if reason:
             text += f" ({reason})"
         payload = {"text": text, "target": target, "from": before, "to": after, "reason": reason}

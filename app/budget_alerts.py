@@ -55,7 +55,7 @@ async def _alert(
         return
     icon = "🛑" if level >= 1 else "⚠️"
     payload = {
-        "text": f"{icon} LLM gateway: {who} has used {pct}% of its {period} budget "
+        "text": f"{icon} AI gateway: {who} has used {pct}% of its {period} budget "
         f"({usd(total)} of {usd(budget)})",
         "kind": "budget",
         "who": who,

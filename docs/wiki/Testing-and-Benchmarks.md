@@ -54,7 +54,7 @@ Rules:
 
 ## Benchmarks
 
-ADR 0009; full results in [`docs/RESULTS.md`](https://github.com/AndrewTtofi/llm-gateway/blob/main/docs/RESULTS.md).
+ADR 0009; full results in [`docs/RESULTS.md`](https://github.com/AndrewTtofi/ai-gateway/blob/main/docs/RESULTS.md).
 
 ### The rig
 

@@ -55,7 +55,7 @@ together. See [Routing and reliability → The first-token boundary](Routing-and
 Add the target to an alias chain (and, for Anthropic, its capability flags) in
 `config/models.yaml`, and add its price to `config/pricing.yaml`. Then run `make reload`.
 See [Configuration reference](Configuration-Reference.md) and
-[`docs/CHANGING-MODELS.md`](https://github.com/AndrewTtofi/llm-gateway/blob/main/docs/CHANGING-MODELS.md).
+[`docs/CHANGING-MODELS.md`](https://github.com/AndrewTtofi/ai-gateway/blob/main/docs/CHANGING-MODELS.md).
 
 **How accurate is the cost tracking?**
 It's as accurate as `pricing.yaml` and the providers' reported usage.
