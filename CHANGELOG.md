@@ -9,6 +9,15 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (eval gate, ADR 0030)
+- **`python -m evals.run_evals --current A --candidate B`** (`make evals`): golden tasks on both models through the gateway's adapters, with the connector tools offered; checks text and tool calls. Exit 1 on a regression against the current model, 2 when the comparison can't be made. `--runs N`, `--offline`, `--json`.
+- **Six golden tasks** (`evals/golden.yaml`), including an indirect prompt injection.
+- **CI** checks the harness offline; the manual **`evals` workflow** runs the live gate.
+- Connectors describe each tool with a schema (`tool_definitions()`).
+
+### Fixed
+- A content part with a missing, null or non-string `text` returned a 500 from the injection scan or the provider translation. It is now a 400 at validation. Found by the fuzz test.
+
 ### Added (identity, ADR 0029)
 - **OIDC:** users call the gateway with an access token from the identity provider, verified against its JWKS (asymmetric algorithms only, issuer, audience, expiry). `OIDC_ISSUER`, `OIDC_AUDIENCE`, and optionally `OIDC_JWKS_URL`, `OIDC_USER_CLAIM`, `OIDC_USER_MATCH`.
 - **SCIM 2.0 server** at `/scim/v2` (`SCIM_TOKEN`): the identity provider provisions users, groups and memberships (migration 0010). Accepts the PATCH forms of Okta, Entra and authentik. Every change is in the admin audit log as operator `scim`.

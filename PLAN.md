@@ -229,12 +229,12 @@ needs no account (ADR 0029). The walkthrough covers other providers.
 
 ### Phase 16 — Evals for model changes (`phase-16-evals`)
 Model calls and real token usage already exist (phases 2 and 4).
-- [ ] `evals/run_evals.py`: each golden task goes to the current and the candidate model
+- [x] `evals/run_evals.py`: each golden task goes to the current and the candidate model
       with the connector tools as tool definitions; real `tool_use` blocks are scored. Exit 1
       on a regression.
-- [ ] `--offline` uses a deterministic stub, so CI runs without keys.
-- [ ] Three more golden tasks, one of them a prompt-injection case.
-- [ ] The eval gate runs in CI.
+- [x] `--offline` uses a deterministic stub, so CI runs without keys.
+- [x] Three more golden tasks, one of them a prompt-injection case.
+- [x] The eval gate runs in CI.
 
 ### Phase 17 — Short-lived connector credentials (`phase-17-connectors`)
 - [ ] GitHub App auth: sign an app JWT, exchange it for an installation token, cache it

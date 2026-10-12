@@ -17,6 +17,11 @@ aliases:
 ```
 Then `make reload`. Clients keep sending `model: "smart"` — nothing changes for them.
 
+Before that change merges, compare the new model with the one it replaces on the golden
+tasks: `make evals current=smart candidate=anthropic/claude-sonnet-5-5`
+([Model evals](wiki/Model-Evals.md)). A new model also needs a data-handling rule in
+`config/policy.yaml`, or the gateway refuses to load it.
+
 ### Change the fallback order
 Reorder the `chain` list. First entry is tried first.
 
