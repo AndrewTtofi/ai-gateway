@@ -5,25 +5,36 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 12, pre-deploy hardening, done: performance, operations, security, test depth (ADRs 0024–0026). Live provider tests wait until spending is allowed.
-- **Branch:** `main` after PR #19. Remote `github.com/AndrewTtofi/llm-gateway` (public)
+- **Phase:** 13, governance baseline, done (ADR 0027). This repo is now `ai-gateway`, seeded from llm-gateway v1.3.1 plus the hardening. llm-gateway itself is left untouched.
+- **Branch:** `phase-13-governance-baseline`. Remote `github.com/AndrewTtofi/ai-gateway` (private until phase 19)
 - **Status:**
-  - `make test` 635; lint clean.
+  - `make test`: 589 pass and 37 skip locally without Redis and Postgres (CI runs them all); lint clean.
   - CI runs: tests with fuzzing, pip-audit, a Trivy image scan, and an end-to-end job on the production compose stack.
   - A 60-minute soak: 259 511 requests, 100% success, memory flat.
   - Dev DB migrated to 0008.
 - **Merged:** #10 → #18 are on `main`, and #19 (hardening) merges this session. The wiki is synced by the `wiki` workflow.
 - **Released:** v1.3.0 (phases 8–10, the security audit and two review rounds), then **v1.3.1**, the same code with a release workflow that only uses GitHub-owned actions (v1.3.0's image build was refused by the repo's Actions policy).
 - **Next up:**
-  - Tag a release for the hardening (suggested v1.4.0).
-  - Pick a deploy target and deploy.
-  - When spending is allowed: live provider tests and `tools/record_fixtures.py`.
+  - Phase 14, governance core (`PLAN.md`): policy file and schema, `Principal`, data classes on the fallback chain, decision records, the tool endpoint with a mock connector. Needs no accounts.
+  - Phase 15 needs an Okta developer tenant from the owner.
 - **Blockers:** none. Owner: confirm the Anthropic API key was rotated; `OPENAI_API_KEY` is still empty.
-- **Open questions:** deploy target (Cloud Run / ECS / VM), still optional
+- **Open questions:**
+  - No image has been released from this repo; production files still name the llm-gateway image until v2.0.0.
+  - The wiki workflow needs the wiki's first page created once in the web UI.
 
 ---
 
 ## Session log
+
+### 2026-10-12 — Session 16 (governance baseline)
+**Did**
+- Created `ai-gateway` from llm-gateway's full history (branch `main` only, no tags, so no release ran) and renamed the project.
+- Checked every commit, tag and pull request of llm-gateway for credentials before reusing the history: none found.
+- ADR 0027: why one gateway, why this codebase is the base, and why not a submodule.
+- Planned phases 13–19 in `PLAN.md`.
+
+**Learned**
+- Governance can't wrap a router from outside. Data-class rules have to filter the fallback chain itself, or a fallback can send data to a model that isn't allowed to hold it.
 
 ### 2026-10-06 — Session 15 (pre-deploy hardening)
 **Did**

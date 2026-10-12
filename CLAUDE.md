@@ -3,8 +3,10 @@
 Instructions for Claude Code working in this repo.
 
 ## Project
-OpenAI-compatible LLM gateway: multi-provider routing, fallback, rate limiting,
-cost tracking, observability. Full plan in `PLAN.md`. Current state in `SESSION.md`.
+Governed AI gateway for an enterprise AI platform. An OpenAI-compatible LLM gateway
+(multi-provider routing, fallback, rate limiting, cost tracking, observability) that is
+gaining a governance layer: identity → policy → spend → routing → audit (ADR 0027).
+Full plan in `PLAN.md`. Current state in `SESSION.md`.
 
 The owner is a platform/DevOps engineer learning AI engineering. When you write
 AI-specific code (streaming, provider formats, token accounting), explain the
