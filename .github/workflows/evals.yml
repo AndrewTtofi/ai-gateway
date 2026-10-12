@@ -1,0 +1,49 @@
+name: evals
+# The model turn-up gate (ADR 0030): run the golden tasks on the current and the candidate
+# model with real calls, and fail if the candidate regresses. Started by hand, because it
+# spends money; attach its summary to the pull request that changes the model.
+#
+# Needs the provider keys of the two models as repository secrets (ANTHROPIC_API_KEY,
+# OPENAI_API_KEY). A provider without a key can't be evaluated: the run ends with exit 2.
+on:
+  workflow_dispatch:
+    inputs:
+      current:
+        description: The model in use today (an alias or provider/model)
+        required: true
+      candidate:
+        description: The model being considered
+        required: true
+      runs:
+        description: Repeats per task (every run must pass)
+        default: "3"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with: { python-version: "3.14", cache: pip, cache-dependency-path: requirements-dev.txt }
+      - run: pip install --require-hashes -r requirements-dev.txt
+      - name: golden tasks, current vs candidate
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Inputs go through the environment, never into the script text.
+          CURRENT: ${{ inputs.current }}
+          CANDIDATE: ${{ inputs.candidate }}
+          RUNS: ${{ inputs.runs }}
+        run: |
+          set -o pipefail
+          python -m evals.run_evals --current "$CURRENT" --candidate "$CANDIDATE" --runs "$RUNS" \
+            --json evals.json | tee evals.txt
+      - name: summary
+        if: always()
+        run: |
+          { echo '```'; cat evals.txt 2>/dev/null || echo "no output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
