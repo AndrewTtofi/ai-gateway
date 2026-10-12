@@ -17,6 +17,7 @@ The interactive OpenAPI docs are at `http://localhost:8000/docs`.
 | POST | `/v1/chat/completions` | OpenAI chat completions, streaming or not |
 | POST | `/v1/messages` | Anthropic Messages API, streaming or not |
 | POST | `/v1/messages/count_tokens` | The gateway's input-token estimate (counts as one request against the key's limit) |
+| POST | `/v1/tools/{connector}/{tool}` | Call a connector's tool: `{args}`. Behind the access policy; counts as one request ([Governance](Governance.md#tools)) |
 | GET | `/v1/models` | Aliases (with their chains) and direct models this key may use |
 | GET | `/v1/catalog` | Price, capabilities, quality, breaker state and live stats per model this key may use; `?capability=`, `?min_context=`, `?sort=price\|quality\|ttft\|latency` ([Choosing models](Choosing-Models.md)); counts as one request |
 | GET | `/healthz` | Liveness: the process answers |
@@ -27,6 +28,7 @@ The interactive OpenAPI docs are at `http://localhost:8000/docs`.
 | DELETE | `/admin/keys/{id}` | Revoke a key |
 | GET | `/admin/teams` | Teams with budget, month-to-date spend and active keys |
 | POST | `/admin/reload` | Reload `config/*.yaml` |
+| GET | `/admin/decisions` | Recent governance decisions, newest first; `?decision=allow\|deny`, `?limit=` ([Governance](Governance.md#the-decision-log)) |
 | GET | `/admin/providers` | Circuit-breaker state per target |
 | GET | `:9100/metrics` | Prometheus (internal port) |
 
@@ -43,6 +45,12 @@ This is the standard Anthropic request (`model`, `max_tokens`, `messages`, `syst
 `tool_choice`, `stream`, …). What's supported and what's dropped is in
 [Providers and translation → Inbound](Providers-and-Translation.md#inbound-anthropic-messages-api-v1messages).
 
+## Request headers
+
+| Header | Meaning |
+|--------|---------|
+| `x-gateway-data-class` | The class of data in this request (`public`, `internal`, `confidential`, `restricted` in the shipped policy). Without it the policy's default applies ([Governance](Governance.md#data-classes)) |
+
 ## Response headers
 
 | Header | When | Meaning |
@@ -55,6 +63,8 @@ This is the standard Anthropic request (`model`, `max_tokens`, `messages`, `syst
 | `x-ratelimit-{limit,remaining,reset}-{requests,tokens}` | admitted or rate-limited | OpenAI-style limit state |
 | `retry-after` | 429 | Seconds until both buckets have room |
 | `server-timing: admit;dur=…` | admitted | Milliseconds the gateway spent on auth, budget and limits |
+| `x-gateway-data-class` | admitted | The data class that was applied, default included |
+| `x-gateway-excluded` | targets were removed | How many targets of the chain may not hold this data class |
 | `x-gateway-route` | policy aliases | `optimize=…; considered=…; chain=…` ([Smart routing](Smart-Routing.md)) |
 | `x-gateway-variant` | A/B aliases | The arm this request was assigned to |
 | `x-gateway-cache` | cached aliases | `hit`, `miss`, `bypass`, `refresh` or `uncacheable` ([Response cache](Response-Cache.md)) |
@@ -84,6 +94,7 @@ On `/v1/messages*`, errors use Anthropic's shape:
 | Status | `code` | When | Retry? |
 |--------|--------|------|--------|
 | 400 | (none), `unsupported_parameter`, `upstream_rejected` | Invalid body (including over 10 000 messages, 1 000 parts per message, `max_tokens` over 1 000 000, `n` outside 1–128), untranslatable request, provider rejected the input | No; fix the request |
+| 400 | `invalid_data_class` | `x-gateway-data-class` isn't a class in the policy | No |
 | 400 | `invalid_route` | Bad routing hints (unknown hint, wrong type) | No |
 | 400 | `no_route` | No model satisfies the policy and the request's needs | No; relax the request |
 | 400 | `prompt_injection_detected` | Blocked by the prompt-injection filter (tier action `block`) | No |

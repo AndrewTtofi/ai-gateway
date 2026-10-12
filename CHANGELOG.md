@@ -9,6 +9,16 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added (governance core, ADR 0028)
+- **Access policy** (`config/policy.yaml`): group → role → tier, data classes, a data-handling rule per model, connector entitlements, and a version. Validated by a schema and cross-checked against the other config files at load, on reload and in CI (`make policy`). Every routable model needs a rule.
+- **Data classes:** a request declares its class with `x-gateway-data-class` (else the policy default). Models that may not hold that class are removed from the fallback chain before routing; with none left, `403 data_class_not_eligible`. The response cache and judge sampling are skipped above the policy's secondary-use class.
+- **Tools:** `POST /v1/tools/{connector}/{tool}` behind the same policy (onboarded, tier, role, data class), with a mock system-of-record connector.
+- **Decision log:** one record per decision, allow or deny, with the reason code and policy version (`decision_log`, migration 0009; `gateway.audit` log line; `GET /admin/decisions`; `gateway_decisions_total`).
+
+### Changed
+- With the shipped example policy, a request without a data class is `internal` and no longer falls back to providers classified `public`-only (Gemini, xAI and DeepSeek in the example). Edit `config/policy.yaml` to match your contracts.
+- `config/policy.yaml` is required: the gateway does not start without it.
+
 ### Changed (governance baseline, ADR 0027)
 - **The project is now `ai-gateway`**, continued from llm-gateway's history. Repo links, the package name, the API title and alert text use the new name. Published-image references still name the llm-gateway image until an image is released from this repo.
 - **Plan for v2** (`PLAN.md`, phases 13–19): identity → policy → spend → routing → audit.

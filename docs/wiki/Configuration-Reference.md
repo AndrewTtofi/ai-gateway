@@ -206,9 +206,16 @@ classifier: { alias: fast, when: suspicious, timeout_seconds: 5, max_chars: 4000
 Prompt-injection rules. See [Quality and safety](Quality-and-Safety.md#prompt-injection-filter).
 Patterns must compile; names are short lower-case slugs.
 
+## `config/policy.yaml`
+
+The access policy: group → role → tier, data classes, a data-handling rule per model, and
+connector entitlements. Required. See [Governance](Governance.md). `make policy` validates
+it against the other files.
+
 ## Reloading
 
-`models.yaml`, `pricing.yaml`, `catalog.yaml`, `limits.yaml` and `guardrails.yaml` reload
+`models.yaml`, `pricing.yaml`, `catalog.yaml`, `limits.yaml`, `guardrails.yaml` and
+`policy.yaml` reload
 together without a restart, in any of three ways:
 
 - `make reload`, which calls `POST /admin/reload`;
