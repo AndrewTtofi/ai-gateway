@@ -138,7 +138,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 _docs = config.settings.docs_enabled
 app = FastAPI(
-    title="LLM Gateway",
+    title="AI Gateway",
     version="1.3.1",
     lifespan=lifespan,
     docs_url="/docs" if _docs else None,

@@ -10,7 +10,7 @@
 ## 1. Start the stack
 
 ```bash
-git clone https://github.com/AndrewTtofi/llm-gateway.git && cd llm-gateway
+git clone https://github.com/AndrewTtofi/ai-gateway.git && cd ai-gateway
 cp .env.example .env
 ```
 

@@ -1,7 +1,7 @@
 # Security
 
 Report vulnerabilities privately through
-[GitHub's private vulnerability reporting](https://github.com/AndrewTtofi/llm-gateway/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/AndrewTtofi/ai-gateway/security/advisories/new)
 (see `SECURITY.md`).
 
 ## Threat model in brief

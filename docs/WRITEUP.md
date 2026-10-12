@@ -53,7 +53,7 @@ it turned out to be most of the work.
 - Provider outage: **3** requests went to the dead provider before the breaker opened, and **0** errors reached clients
 - **100%** of requests were served through provider, Redis and Postgres failures. The trade-off: while Redis is down, rate limits are off (budgets keep the last known spend), and while Postgres is down, keys not in the cache get 503. **97/97** streams survived a SIGTERM.
 
-Code, ADRs and full results: https://github.com/AndrewTtofi/llm-gateway
+Code, ADRs and full results: https://github.com/AndrewTtofi/ai-gateway
 
 ---
 
@@ -85,6 +85,6 @@ Code, ADRs and full results: https://github.com/AndrewTtofi/llm-gateway
 >
 > Result: +4.0 ms p95 overhead, and 0 client-visible errors during a provider outage.
 >
-> Code, design decisions and benchmarks: https://github.com/AndrewTtofi/llm-gateway
+> Code, design decisions and benchmarks: https://github.com/AndrewTtofi/ai-gateway
 >
 > #PlatformEngineering #AIEngineering #LLM #SRE #DevOps

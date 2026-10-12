@@ -14,7 +14,7 @@ Thanks for your interest! This is a learning-focused personal project (see
 Requirements: Python 3.14, Docker + Docker Compose, optionally [Ollama](https://ollama.com).
 
 ```bash
-git clone https://github.com/AndrewTtofi/llm-gateway && cd llm-gateway
+git clone https://github.com/AndrewTtofi/ai-gateway && cd ai-gateway
 python3.14 -m venv .venv && source .venv/bin/activate
 make install                  # dev deps from the hashed lockfile
 cp .env.example .env          # provider keys are optional for development
