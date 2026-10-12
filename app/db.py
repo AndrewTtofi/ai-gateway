@@ -18,6 +18,7 @@ from sqlalchemy import (
     String,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -168,6 +169,38 @@ class UsageRow(Base):
     cost_usd: Mapped[float | None] = mapped_column(Float)  # None = unpriced model
     latency_ms: Mapped[int] = mapped_column(Integer)
     ttft_ms: Mapped[int | None] = mapped_column(Integer)  # streams only
+
+
+class SpendExceptionRow(Base):
+    """A request for more budget this month, and what was decided (ADR 0032)."""
+
+    __tablename__ = "spend_exceptions"
+    __table_args__ = (
+        # One open request per caller and month; decided ones can be any number.
+        Index(
+            "uq_spend_exceptions_pending",
+            "spend_id",
+            "period",
+            unique=True,
+            postgresql_where=text("status = 'pending'"),
+        ),
+        Index("ix_spend_exceptions_grant", "spend_id", "period", "status"),
+    )
+
+    id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    subject: Mapped[str] = mapped_column(String(100), index=True)  # "user:<id>" | "key:<id>"
+    subject_name: Mapped[str] = mapped_column(String(100))
+    spend_id: Mapped[str] = mapped_column(String(100))  # where the caller's spend is counted
+    period: Mapped[str] = mapped_column(String(7))  # the month it applies to: 2026-10
+    amount_usd: Mapped[float] = mapped_column(Float)
+    reason: Mapped[str] = mapped_column(String(500))
+    status: Mapped[str] = mapped_column(String(8))  # pending | approved | denied
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    granted_usd: Mapped[float | None] = mapped_column(Float)
+    decided_by: Mapped[str | None] = mapped_column(String(100))
+    decided_by_name: Mapped[str | None] = mapped_column(String(100))
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(String(500))
 
 
 def make_engine(url: str, timeout: float | None = None, **kwargs: Any) -> AsyncEngine:

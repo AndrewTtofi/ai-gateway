@@ -44,6 +44,15 @@ class ConnectorRule(BaseModel):
     allowed_roles: list[str] = []  # empty = any role with the tier
 
 
+class SpendExceptionRule(BaseModel):
+    """Who may approve more budget for someone at their cap, and how much (ADR 0032)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    approver_groups: list[str] = []  # empty: nobody can approve (fail closed)
+    max_usd: float = Field(default=100, gt=0)  # the most one request may ask for
+
+
 class AccessPolicy(BaseModel):
     """config/policy.yaml. Unknown keys are an error: a typo must not silently drop a rule."""
 
@@ -62,6 +71,7 @@ class AccessPolicy(BaseModel):
     # only run for requests up to this class.
     secondary_use_max_data_class: str
     connectors: dict[str, ConnectorRule] = {}
+    spend_exceptions: SpendExceptionRule = SpendExceptionRule()
 
     @model_validator(mode="after")
     def _consistent(self) -> AccessPolicy:
@@ -110,6 +120,9 @@ class AccessPolicy(BaseModel):
         """The highest tier among the caller's roles; None if no group maps to a role."""
         tiers = [self.role_tiers[r] for r in self.roles(groups)]
         return max(tiers, key=self.tier_rank.index) if tiers else None
+
+    def may_approve_spend(self, principal: Principal) -> bool:
+        return bool(set(principal.groups) & set(self.spend_exceptions.approver_groups))
 
     # --- data handling -------------------------------------------------------------
 

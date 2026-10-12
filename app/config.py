@@ -270,12 +270,21 @@ class Estimation(BaseModel):
 class Tier(BaseModel):
     requests_per_minute: int = Field(gt=0)
     tokens_per_minute: int = Field(gt=0)
-    monthly_budget_usd: float = Field(ge=0)
+    monthly_budget_usd: float = Field(ge=0)  # the hard cap: requests are refused past it
+    # The soft cap (ADR 0032): past it requests still run, the caller is told in a header
+    # and an alert goes out once. None: no soft cap.
+    soft_budget_usd: float | None = Field(default=None, ge=0)
     allowed_aliases: list[str]
     # Prompt-injection filter (ADR 0021): what to do when a request looks like one.
     injection: Literal["off", "log", "flag", "block"] = "log"
     # Requests in flight per key and replica (ADR 0023); 0 = no limit.
     concurrent_requests: int = Field(default=20, ge=0)
+
+    @model_validator(mode="after")
+    def _soft_below_hard(self) -> Tier:
+        if self.soft_budget_usd is not None and self.soft_budget_usd > self.monthly_budget_usd:
+            raise ValueError("soft_budget_usd must not be above monthly_budget_usd")
+        return self
 
 
 class Team(BaseModel):

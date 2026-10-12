@@ -36,6 +36,12 @@ from app.ratelimit import (
 )
 from app.routing import router
 from app.routing.breaker import MemoryBreakerStore, RedisBreakerStore
+from app.spend_exceptions import (
+    ExceptionStore,
+    Grants,
+    MemoryExceptionStore,
+    PostgresExceptionStore,
+)
 
 keys: CachedKeys = CachedKeys(MemoryKeyStore())
 limiter: Limiter = MemoryLimiter()
@@ -48,6 +54,8 @@ audit: AuditStore = MemoryAuditStore()  # admin changes (ADR 0025)
 decisions: DecisionSink = MemoryDecisionSink()  # governance decisions (ADR 0028)
 directory: Directory = MemoryDirectory()  # users and groups from the IdP (ADR 0029)
 identities: CachedIdentities = CachedIdentities(directory)
+exceptions: ExceptionStore = MemoryExceptionStore()  # spend exceptions (ADR 0032)
+grants: Grants = Grants(exceptions)
 alerts: Any = None  # app.routing.selfheal.Alerts, set at startup (breaker and budget alerts)
 _writer: PostgresUsageWriter | None = None
 _verifier: Verifier | None = None
@@ -78,6 +86,7 @@ _engine: AsyncEngine | None = None
 async def start() -> None:
     global keys, limiter, spend, usage, response_cache, judge, _redis, _engine, _writer, started
     global _cache_redis, audit, decisions, _decision_writer, directory, identities
+    global exceptions, grants
     if config.settings.gateway_stores == "memory":
         router.store = MemoryBreakerStore()
         judge.start()
@@ -106,6 +115,8 @@ async def start() -> None:
     audit = PostgresAuditStore(sessions)
     directory = PostgresDirectory(sessions)
     identities = CachedIdentities(directory)
+    exceptions = PostgresExceptionStore(sessions)
+    grants = Grants(exceptions)
     judge.start()
     spend = RedisSpend(_redis)
     router.store = (
