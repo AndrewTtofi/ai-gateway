@@ -78,3 +78,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - run: scripts/e2e_prod.sh
+  # A real identity provider (authentik) in front of the gateway: a user is provisioned
+  # over SCIM, calls the gateway with an OIDC token, changes group, is deactivated
+  # (scripts/identity_e2e.sh, ADR 0029).
+  identity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - run: scripts/identity_e2e.sh
