@@ -31,6 +31,12 @@ class ConnectorError(Exception):
     status = 502
 
 
+class BadArguments(ConnectorError):
+    """The caller's arguments are wrong: nothing was sent to the external system."""
+
+    status = 400
+
+
 class ConnectorNotConfigured(ConnectorError):
     """The connector is deployed and onboarded, but its credentials aren't set here."""
 
@@ -210,14 +216,14 @@ class GitHub:
             or not _REPO.fullmatch(repo)
             or repo.partition("/")[2] in (".", "..")
         ):
-            raise ConnectorError("repo must be 'owner/name'")
+            raise BadArguments("repo must be 'owner/name'")
         api = self._settings()[0]
         if tool == "list_pull_requests":
             state, limit = args.get("state", "open"), args.get("limit", 20)
             if state not in ("open", "closed", "all"):
-                raise ConnectorError("state must be open, closed or all")
+                raise BadArguments("state must be open, closed or all")
             if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 50:
-                raise ConnectorError("limit must be between 1 and 50")
+                raise BadArguments("limit must be between 1 and 50")
             found = await self._get(
                 f"{api}/repos/{repo}/pulls", credential, {"state": state, "per_page": limit}
             )
@@ -227,7 +233,7 @@ class GitHub:
             return {"repo": repo, "pull_requests": pulls}
         number = args.get("number")
         if isinstance(number, bool) or not isinstance(number, int) or number < 1:
-            raise ConnectorError("number must be a positive integer")
+            raise BadArguments("number must be a positive integer")
         pull = await self._get(f"{api}/repos/{repo}/pulls/{number}", credential)
         if not isinstance(pull, dict):
             raise ConnectorError("github sent an unexpected response")
