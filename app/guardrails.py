@@ -126,7 +126,11 @@ def _size(messages: list[Any]) -> int:
         if isinstance(content, str):
             n += len(content)
         elif isinstance(content, list):
-            n += sum(len(p.get("text") or "") for p in content if isinstance(p, dict))
+            n += sum(
+                len(p["text"])
+                for p in content
+                if isinstance(p, dict) and isinstance(p.get("text"), str)
+            )
     return n
 
 

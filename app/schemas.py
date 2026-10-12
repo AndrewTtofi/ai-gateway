@@ -44,6 +44,13 @@ class ChatMessage(BaseModel):
             )
         ):
             raise ValueError("tool_calls must be a list of {id, type, function: {name, arguments}}")
+        # Everything downstream (the injection scan, the cache key, every provider
+        # translation) reads a text part's text as a string: refuse anything else here.
+        if isinstance(self.content, list) and any(
+            (p.get("type") == "text" or "text" in p) and not isinstance(p.get("text"), str)
+            for p in self.content
+        ):
+            raise ValueError("a content part's `text` must be a string (required for type `text`)")
         return self
 
 
