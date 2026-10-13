@@ -9,6 +9,11 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Docs
+- README: soft and hard caps in the tier table, `config/policy.yaml` in the config table,
+  the governed endpoints in the FAQ, and a related-projects section. `CLAUDE.md` and
+  `SESSION.md` no longer describe the governance layer as in progress.
+
 ## [2.1.0] - 2026-10-13 (Phase 20: decisions for external tool servers)
 
 ### Added (ADR 0033)

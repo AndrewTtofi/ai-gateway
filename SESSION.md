@@ -6,11 +6,11 @@ Keep "Current state" short and always true.
 
 ## Current state
 - **Phase:** 20, decisions for external tool servers, done (ADR 0033). v2.1.0.
-- **Branch:** `feat-delegated-decisions`. Remote `github.com/AndrewTtofi/ai-gateway` (public). Pull requests are rebase-merged once CI is green.
+- **Branch:** `main`. Remote `github.com/AndrewTtofi/ai-gateway` (public). Pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 814 pass and 47 skip without Redis and Postgres; lint clean.
+  - `make test`: 814 pass; the integration tests skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-- **Released:** v2.0.0 (2026-10-12). v2.1.0 is tagged after this branch merges.
+- **Released:** v2.0.0 (2026-10-12), v2.1.0 (2026-10-13).
 - **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, approver notifications, decision-log retention.
 - **Blockers:** none.
 - **Open questions:**
