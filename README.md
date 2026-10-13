@@ -62,8 +62,9 @@ come from, what happens when a store is down, and the trust boundaries.
 
 ## Quickstart
 
-You need Docker with Compose. No accounts and no provider keys are needed to try it.
-[Ollama](https://ollama.com) is optional and gives you a free local model.
+You need Docker with Compose, plus `make`, `curl` and `openssl`. No accounts and no
+provider keys are needed to try it. [Ollama](https://ollama.com) is optional and gives you
+a free local model.
 
 ```bash
 git clone https://github.com/AndrewTtofi/ai-gateway.git && cd ai-gateway
@@ -79,6 +80,19 @@ curl localhost:8000/v1/chat/completions -H "Authorization: Bearer $GW_KEY" \
   -H 'content-type: application/json' \
   -d '{"model":"fast","messages":[{"role":"user","content":"Say hi in five words"}]}'
 ```
+
+That request needs a model to answer it: Ollama, or a provider key in `.env`. With
+neither, it returns `502 upstream_error`. The dev stack also ships a fake model that needs
+nothing, which is what the demo below uses for spend:
+
+```bash
+make key name=demo tier=chaos                     # a key for the fake provider
+curl localhost:8000/v1/chat/completions -H "Authorization: Bearer gw_..." \
+  -H 'content-type: application/json' \
+  -d '{"model":"fake/ok","messages":[{"role":"user","content":"Say hi"}]}'
+```
+
+`make down` stops the stack and keeps its data; `docker compose down -v` removes the data too.
 
 | Service | URL |
 |---------|-----|
@@ -134,7 +148,8 @@ call -X POST localhost:8000/v1/spend/exceptions/$EXC/approve -H "Authorization: 
 call -X POST localhost:8000/v1/spend/exceptions/$EXC/approve -H "Authorization: Bearer $ONCALL"   # 200 approved
 ```
 
-**Audit.** Every step above, allowed or denied.
+**Audit.** Every step above, allowed or denied. Records are written in batches, so give it
+a few seconds.
 
 ```bash
 make decisions n=6
