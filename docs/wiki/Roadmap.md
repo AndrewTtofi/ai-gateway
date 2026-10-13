@@ -12,7 +12,7 @@ a plan, not a promise. Each item says **why** it matters, so the order can chang
 | **Run the eval gate between two hosted models** | It has only compared two local models so far |
 | **Verify SCIM and OIDC against a hosted identity provider** (Okta, Entra) | Their request forms are covered from documentation, not a live tenant |
 | **Run this gateway and the MCP server together** against a real Atlassian site | Done for sign-in, account linking, a Confluence read and a Jira search (2026-10-13). Still to confirm live: writes |
-| **Notify approvers** of a pending spend exception | Today they have to list the queue |
+| ~~**Notify approvers** of a pending spend exception~~ | Done: a webhook on request and on decision (ADR 0034). Not yet: telling the requester, reminders for a request left pending |
 | ~~**A retention job for the decision log**~~ | Done: `prune-decisions`, off until `DECISION_RETENTION_DAYS` is set |
 | **Put the injection classifier under the data-class ceiling** | It is the one feature that can still copy prompt content to a model without that check |
 | **Budget grants for teams,** not only individual callers | A team at its cap is still raised by editing config |

@@ -14,6 +14,10 @@ Version plan: each completed phase bumps the minor version
   `make prune-decisions DAYS=N [DRY=1]`, and a `prune-decisions` service in the production
   stack that runs daily once `DECISION_RETENTION_DAYS` is set. There is no default age: the
   decision log is the audit record.
+- Approvers are told about spend exceptions (ADR 0034): a webhook post when a request is
+  made and when it is approved or denied, to `SPEND_EXCEPTIONS_WEBHOOK_URL` or, without
+  it, the alert webhook. Once per step across replicas, in the background, and without
+  the requester's reason or the approver's note.
 
 ### Docs
 - README: soft and hard caps in the tier table, `config/policy.yaml` in the config table,
