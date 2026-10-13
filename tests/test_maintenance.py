@@ -19,10 +19,10 @@ async def db(store: PostgresKeyStore, monkeypatch: pytest.MonkeyPatch) -> AsyncI
     monkeypatch.setattr(config.settings, "database_url", URL)
     engine = make_engine(URL)
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE usage_log"))
+        await conn.execute(text("TRUNCATE usage_log, decision_log"))
     yield
     async with engine.begin() as conn:
-        await conn.execute(text("TRUNCATE usage_log"))
+        await conn.execute(text("TRUNCATE usage_log, decision_log"))
         if await conn.scalar(text("SELECT 1 FROM pg_roles WHERE rolname = :r"), {"r": ROLE}):
             db_name = await conn.scalar(text("SELECT current_database()"))
             await conn.execute(text(f"REVOKE ALL ON ALL TABLES IN SCHEMA public FROM {ROLE}"))
@@ -61,6 +61,45 @@ async def test_prune_deletes_only_old_rows_in_batches(db: None) -> None:
     await insert_rows([1, 5, 100, 200, 400])
     assert await maintenance.prune(days=90, batch=2) == 3  # several batches
     assert await count_rows() == 2
+
+
+async def insert_decisions(ages_days: list[int]) -> None:
+    engine = make_engine(URL)
+    async with engine.begin() as conn:
+        for age in ages_days:
+            await conn.execute(
+                text(
+                    "INSERT INTO decision_log (at, request_id, subject, subject_kind, "
+                    "subject_name, roles, tier, action, data_class, decision, code, reason, "
+                    "policy_version, detail) VALUES (now() - make_interval(days => :age), "
+                    "'r', 'key:1', 'key', 'k', '[]', 'standard', 'model:a', 'internal', "
+                    "'allow', 'ok', 'ok', '1', '{}')"
+                ),
+                {"age": age},
+            )
+    await engine.dispose()
+
+
+async def count_decisions() -> int:
+    engine = make_engine(URL)
+    async with engine.connect() as conn:
+        n = int(await conn.scalar(text("SELECT count(*) FROM decision_log")) or 0)
+    await engine.dispose()
+    return n
+
+
+async def test_prune_decisions_deletes_only_old_rows_and_leaves_usage(db: None) -> None:
+    await insert_decisions([1, 5, 100, 200, 400])
+    await insert_rows([400])
+    assert await maintenance.prune_decisions(days=90, batch=2) == 3  # several batches
+    assert await count_decisions() == 2
+    assert await count_rows() == 1  # a different table's retention is its own
+
+
+async def test_prune_decisions_dry_run_deletes_nothing(db: None) -> None:
+    await insert_decisions([1, 100, 400])
+    assert await maintenance.prune_decisions(days=90, dry_run=True) == 2
+    assert await count_decisions() == 3
 
 
 async def test_readonly_role_cannot_read_key_hashes(db: None) -> None:
@@ -110,3 +149,14 @@ def test_bad_batch_sizes_are_rejected() -> None:
         asyncio.run(maintenance.prune(days=1, batch=0))
     with pytest.raises(SystemExit):
         maintenance.main(["prune", "--days", "1", "--batch", "0"])
+
+
+def test_prune_decisions_rejects_bad_arguments() -> None:
+    import asyncio
+
+    with pytest.raises(ValueError):
+        asyncio.run(maintenance.prune_decisions(days=0))
+    with pytest.raises(SystemExit):
+        maintenance.main(["prune-decisions", "--days", "0"])
+    with pytest.raises(SystemExit):  # no default age: the audit record is the operator's call
+        maintenance.main(["prune-decisions"])

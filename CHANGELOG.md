@@ -9,6 +9,12 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+### Added
+- Decision-log retention: `python -m app.maintenance prune-decisions --days N [--dry-run]`,
+  `make prune-decisions DAYS=N [DRY=1]`, and a `prune-decisions` service in the production
+  stack that runs daily once `DECISION_RETENTION_DAYS` is set. There is no default age: the
+  decision log is the audit record.
+
 ### Docs
 - README: soft and hard caps in the tier table, `config/policy.yaml` in the config table,
   the governed endpoints in the FAQ, and a related-projects section. `CLAUDE.md` and

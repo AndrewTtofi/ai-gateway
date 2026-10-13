@@ -13,7 +13,7 @@ a plan, not a promise. Each item says **why** it matters, so the order can chang
 | **Verify SCIM and OIDC against a hosted identity provider** (Okta, Entra) | Their request forms are covered from documentation, not a live tenant |
 | **Run this gateway and the MCP server together** against a real Atlassian site | `/v1/authorize` and [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed) are each tested against a stand-in for the other |
 | **Notify approvers** of a pending spend exception | Today they have to list the queue |
-| **A retention job for the decision log** | Usage rows are pruned; decision records never are |
+| ~~**A retention job for the decision log**~~ | Done: `prune-decisions`, off until `DECISION_RETENTION_DAYS` is set |
 | **Put the injection classifier under the data-class ceiling** | It is the one feature that can still copy prompt content to a model without that check |
 | **Budget grants for teams,** not only individual callers | A team at its cap is still raised by editing config |
 | **Token exchange (RFC 8693) for external tool servers** | The gateway would verify the user itself instead of taking a named service's word (ADR 0033) |

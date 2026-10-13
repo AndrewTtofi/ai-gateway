@@ -1,4 +1,4 @@
-.PHONY: up down logs decisions evals idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage restore-drill admin-key
+.PHONY: up down logs decisions evals idp idp-down idp-e2e policy test test-e2e test-live lint fmt reload shell install lock migrate key prices prune-usage prune-decisions restore-drill admin-key
 
 up:
 	docker compose up -d --build
@@ -87,6 +87,11 @@ prices:
 # Delete usage_log rows older than DAYS (default 90), in batches. Export first if needed.
 prune-usage:
 	docker compose exec gateway python -m app.maintenance prune --days $(or $(DAYS),90)
+
+# Delete decision_log rows older than DAYS (required: it's the audit record). DRY=1 only counts.
+prune-decisions:
+	@test -n "$(DAYS)" || { echo "usage: make prune-decisions DAYS=365 [DRY=1]"; exit 2; }
+	docker compose exec gateway python -m app.maintenance prune-decisions --days $(DAYS) $(if $(DRY),--dry-run)
 
 # Production: restore the newest backup into a scratch database and compare (Runbooks.md).
 PROD = docker compose -f docker-compose.prod.yml --env-file .env.prod
