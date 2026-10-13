@@ -11,7 +11,7 @@ a plan, not a promise. Each item says **why** it matters, so the order can chang
 |------|-----|
 | **Run the eval gate between two hosted models** | It has only compared two local models so far |
 | **Verify SCIM and OIDC against a hosted identity provider** (Okta, Entra) | Their request forms are covered from documentation, not a live tenant |
-| **Run this gateway and the MCP server together** against a real Atlassian site | Done for sign-in, account linking and a Confluence read (2026-10-13). Still to confirm: a Jira read (the first attempt got a 404 from a site that probably had no Jira), and writes |
+| **Run this gateway and the MCP server together** against a real Atlassian site | Done for sign-in, account linking, a Confluence read and a Jira search (2026-10-13). Still to confirm live: writes |
 | **Notify approvers** of a pending spend exception | Today they have to list the queue |
 | ~~**A retention job for the decision log**~~ | Done: `prune-decisions`, off until `DECISION_RETENTION_DAYS` is set |
 | **Put the injection classifier under the data-class ceiling** | It is the one feature that can still copy prompt content to a model without that check |
