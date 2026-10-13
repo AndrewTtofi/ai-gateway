@@ -9,6 +9,8 @@ Version plan: each completed phase bumps the minor version
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-10-13 (after phase 20: retention, approver notifications, evals through the gateway)
+
 ### Added
 - Decision-log retention: `python -m app.maintenance prune-decisions --days N [--dry-run]`,
   `make prune-decisions DAYS=N [DRY=1]`, and a `prune-decisions` service in the production

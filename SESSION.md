@@ -5,12 +5,12 @@ Running log of where the work is. Updated at the end of every session
 Keep "Current state" short and always true.
 
 ## Current state
-- **Phase:** 20, decisions for external tool servers, done (ADR 0033). v2.1.0.
+- **Phase:** 20 done (ADR 0033). Since then, without a phase number: decision-log retention, approver notifications (ADR 0034), the eval gate through the gateway's API (ADR 0035). v2.2.0.
 - **Branch:** `main`. Remote `github.com/AndrewTtofi/ai-gateway` (public). Pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 820 pass; the integration tests skip without Redis and Postgres; lint clean.
+  - `make test`: 823 pass; the integration tests skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
-- **Released:** v2.0.0 (2026-10-12), v2.1.0 (2026-10-13).
+- **Released:** v2.0.0 (2026-10-12), v2.1.0 and v2.2.0 (2026-10-13).
 - **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, the injection classifier under the data-class ceiling. In progress: running this gateway with mcp-atlassian-governed against a real Atlassian site (demo credentials in the two repos' gitignored `.env` files).
 - **Blockers:** none.
 - **Open questions:**

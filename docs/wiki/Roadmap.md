@@ -1,6 +1,6 @@
 # Roadmap
 
-Where the gateway goes after v2.1. The routing gateway (phases 0–12) and the governance
+Where the gateway goes after v2.2. The routing gateway (phases 0–12) and the governance
 layer (phases 13–20) are done; see `PLAN.md` and the
 [CHANGELOG](https://github.com/AndrewTtofi/ai-gateway/blob/main/CHANGELOG.md). This page is
 a plan, not a promise. Each item says **why** it matters, so the order can change.
