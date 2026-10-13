@@ -1014,6 +1014,7 @@ async def request_spend_exception(
         amount_usd=entry.amount_usd,
         period=entry.period,
     )
+    spend_exceptions.notify(entry, "requested")
     return entry.public()
 
 
@@ -1089,6 +1090,7 @@ async def _decide_spend_exception(
         granted_usd=decided.granted_usd,
         period=decided.period,
     )
+    spend_exceptions.notify(decided, outcome)
     return decided.public()
 
 

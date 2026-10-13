@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     github_app_installation_id: str = ""
     github_app_private_key_file: str = ""
     github_api_url: str = "https://api.github.com"  # GitHub Enterprise Server: https://host/api/v3
+    # Where approvers hear about spend exceptions (ADR 0034): a Slack-compatible webhook.
+    # Empty: the operators' alert webhook is used, if there is one.
+    spend_exceptions_webhook_url: str = ""
     # More operators, one key each: lines of `name sha256-hex-of-key` (ADR 0025).
     admin_keys_file: str = ""
     log_level: str = "INFO"

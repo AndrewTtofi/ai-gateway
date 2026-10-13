@@ -8,10 +8,15 @@ log and the admin audit log.
 An approved amount is added to the caller's budget for that month only. The request path
 looks for grants only after a reservation was refused, so a caller within budget pays
 nothing for this feature.
+
+Approvers are told when a request arrives and when it is decided (ADR 0034), through a
+webhook. The message says who, how much and which month. It never carries the requester's
+reason or the approver's note: those are free text, and stay in the queue.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -70,6 +75,69 @@ def new(
         status="pending",
         requested_at=datetime.now(UTC),
     )
+
+
+Event = Literal["requested", "approved", "denied"]
+NOTIFY_ONCE_SECONDS = 40 * 86400  # longer than the month a request lives in
+_tasks: set[asyncio.Task[None]] = set()
+
+
+def message(entry: SpendException, event: Event) -> dict[str, Any]:
+    """What the approvers' channel is sent. No reason and no note: free text written by a
+    caller or an approver is not copied to a chat service (ADR 0034)."""
+    from app.budget_alerts import usd  # late: budget_alerts loads the config at import
+
+    who, asked = entry.subject_name or entry.subject, usd(entry.amount_usd)
+    by = entry.decided_by_name or entry.decided_by or "someone"
+    if event == "requested":
+        text = (
+            f"🙋 AI gateway: {who} asks for {asked} more budget for {entry.period}. "
+            "Review: GET /v1/spend/exceptions?status=pending"
+        )
+    elif event == "approved":
+        granted = usd(entry.granted_usd or 0.0)
+        text = f"✅ AI gateway: {by} approved {granted} of the {asked} {who} asked for"
+        text += f" ({entry.period})"
+    else:
+        text = f"🚫 AI gateway: {by} denied the {asked} {who} asked for ({entry.period})"
+    return {
+        "text": text,
+        "kind": "spend_exception",
+        "event": event,
+        "id": entry.id,
+        "subject": entry.subject,
+        "who": who,
+        "amount_usd": entry.amount_usd,
+        "granted_usd": entry.granted_usd,
+        "period": entry.period,
+        "decided_by": entry.decided_by,
+    }
+
+
+def notify(entry: SpendException, event: Event) -> None:
+    """Tell the approvers, in the background: a slow or broken webhook must not delay or
+    fail the request that was just recorded."""
+    task = asyncio.create_task(_notify(entry, event))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+
+
+async def _notify(entry: SpendException, event: Event) -> None:
+    from app import config, services  # late: services imports most of the app
+
+    log.info("spend exception %s %s (%s)", entry.id, event, entry.subject)
+    alerts: Any = services.alerts
+    if alerts is None:
+        return
+    try:
+        await alerts.deliver(
+            message(entry, event),
+            dedupe=f"spend-exception:{{{entry.id}}}:{event}",
+            ttl=NOTIFY_ONCE_SECONDS,
+            url=config.settings.spend_exceptions_webhook_url or None,
+        )
+    except Exception as exc:  # the request and the decision are already stored
+        log.warning("spend exception notification failed: %s", type(exc).__name__)
 
 
 class ExceptionStore(Protocol):

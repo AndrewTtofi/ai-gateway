@@ -158,9 +158,12 @@ class Alerts:
         payload = {"text": text, "target": target, "from": before, "to": after, "reason": reason}
         await self._post_payload(url, payload)
 
-    async def deliver(self, payload: dict[str, Any], dedupe: str, ttl: float) -> None:
-        """Any other alert (budgets): sent once per `dedupe` key per `ttl`, fleet-wide."""
-        url = self._url()
+    async def deliver(
+        self, payload: dict[str, Any], dedupe: str, ttl: float, url: str | None = None
+    ) -> None:
+        """Any other alert (budgets, spend exceptions): sent once per `dedupe` key per
+        `ttl`, fleet-wide. `url` sends it somewhere other than the operators' webhook."""
+        url = url or self._url()
         if not url:
             return
         if self.redis is not None:

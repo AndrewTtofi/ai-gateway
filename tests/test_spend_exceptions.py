@@ -224,6 +224,128 @@ def test_only_an_approver_group_decides_and_never_their_own_request(
     assert services.exceptions.entries[theirs].status == "pending"  # type: ignore[attr-defined]
 
 
+# --- telling the approvers (ADR 0034) ----------------------------------------------------
+
+
+class Channel:
+    """Stands in for the alert sender: what would be posted, and where."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict[str, Any]] = []
+        self.broken = False
+
+    async def deliver(
+        self, payload: dict[str, Any], dedupe: str, ttl: float, url: str | None = None
+    ) -> None:
+        if self.broken:
+            raise RuntimeError("webhook down")
+        self.sent.append({**payload, "dedupe": dedupe, "url": url})
+
+
+@pytest.fixture
+def channel(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> Channel:
+    made = Channel()
+    monkeypatch.setattr(services, "alerts", made)  # after startup, which sets the real one
+    monkeypatch.setattr(config.settings, "spend_exceptions_webhook_url", "")
+    return made
+
+
+def settled(client: TestClient, channel: Channel) -> list[dict[str, Any]]:
+    """Notifications go out in the background: one more request lets them finish."""
+    client.get("/healthz")
+    return channel.sent
+
+
+def test_approvers_are_told_of_a_request_and_its_decision_without_the_free_text(
+    client: TestClient, caller: dict[str, str], approver: dict[str, str], channel: Channel
+) -> None:
+    pending = ask(client, caller, 30, "SECRET-PROJECT-NAME needs it").json()
+    (asked,) = settled(client, channel)
+    assert (asked["kind"], asked["event"], asked["id"]) == (
+        "spend_exception",
+        "requested",
+        pending["id"],
+    )
+    assert "asks for $30.00 more budget" in asked["text"] and pending["period"] in asked["text"]
+    assert "/v1/spend/exceptions?status=pending" in asked["text"]  # where to read the reason
+    assert asked["url"] is None  # no channel of its own: the operators' webhook
+
+    client.post(
+        f"/v1/spend/exceptions/{pending['id']}/approve",
+        json={"amount_usd": 25, "note": "SECRET-NOTE"},
+        headers=approver,
+    )
+    _, approved = settled(client, channel)
+    assert (approved["event"], approved["granted_usd"]) == ("approved", 25)
+    assert "approved $25.00 of the $30.00" in approved["text"]
+    assert approved["decided_by"].startswith("key:")
+    # One message per step of one request, whichever replica handles it.
+    assert asked["dedupe"] != approved["dedupe"] and pending["id"] in approved["dedupe"]
+    assert "SECRET" not in str(channel.sent)
+
+
+def test_a_denial_is_announced_and_refused_attempts_are_not(
+    client: TestClient, caller: dict[str, str], approver: dict[str, str], channel: Channel
+) -> None:
+    theirs = ask(client, caller).json()["id"]
+    assert ask(client, caller).status_code == 409  # already pending
+    assert ask(client, team_key("eng"), 51).status_code == 400  # more than may be asked for
+    client.post(f"/v1/spend/exceptions/{theirs}/approve", headers=team_key("eng"))  # 403
+    client.post(f"/v1/spend/exceptions/{theirs}/deny", headers=approver)
+    client.post(f"/v1/spend/exceptions/{theirs}/approve", headers=approver)  # 409: decided
+    sent = settled(client, channel)
+    assert [m["event"] for m in sent] == ["requested", "denied"]
+    assert "denied the $30.00" in sent[-1]["text"] and sent[-1]["granted_usd"] is None
+
+
+def test_approvers_can_have_a_channel_of_their_own(
+    client: TestClient, caller: dict[str, str], channel: Channel, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    url = "https://hooks.example/approvers"
+    monkeypatch.setattr(config.settings, "spend_exceptions_webhook_url", url)
+    ask(client, caller)
+    assert [m["url"] for m in settled(client, channel)] == [url]
+
+
+def test_a_broken_channel_does_not_fail_the_request(
+    client: TestClient, caller: dict[str, str], approver: dict[str, str], channel: Channel
+) -> None:
+    channel.broken = True
+    asked = ask(client, caller)
+    assert asked.status_code == 201
+    approved = client.post(f"/v1/spend/exceptions/{asked.json()['id']}/approve", headers=approver)
+    assert approved.status_code == 200 and settled(client, channel) == []
+    assert chat(client, caller).status_code == 200
+
+
+async def test_a_message_goes_to_the_url_it_names_and_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.routing.selfheal import Alerts
+
+    posted: list[tuple[str, dict[str, Any]]] = []
+
+    async def post(url: str, payload: dict[str, Any]) -> None:
+        posted.append((url, payload))
+
+    class Locks:
+        def __init__(self) -> None:
+            self.taken: set[str] = set()
+
+        async def set(self, key: str, value: str, nx: bool, ex: int) -> bool:
+            taken = key in self.taken
+            self.taken.add(key)
+            return not taken
+
+    monkeypatch.delenv("ALERT_WEBHOOK_URL", raising=False)
+    entry = spend_exceptions.new("key:k1", "batch-job", "k1", "2026-10", 30, "private reason")
+    payload = spend_exceptions.message(entry, "requested")
+    locks = Locks()
+    for replica in (Alerts(redis=locks, post=post), Alerts(redis=locks, post=post)):
+        await replica.deliver(payload, "spend-exception:{x}:requested", 60, url="https://a.example")
+        await replica.deliver(payload, "spend-exception:{y}:requested", 60)  # nowhere to send
+    assert [url for url, _ in posted] == ["https://a.example"]
+    assert "private reason" not in str(posted) and "batch-job asks for $30.00" in str(posted)
+
+
 def test_nobody_approves_when_the_policy_names_no_group(
     client: TestClient,
     caller: dict[str, str],
