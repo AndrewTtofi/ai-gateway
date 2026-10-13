@@ -108,6 +108,11 @@ curl -s -X POST localhost:8000/v1/spend/exceptions/$ID/approve -H "Authorization
 curl -s -X POST localhost:8000/v1/spend/exceptions/$ID/deny -H "Authorization: Bearer $APPROVER"
 ```
 
+Approvers hear about it in the channel behind `SPEND_EXCEPTIONS_WEBHOOK_URL` (or the
+alert webhook), and again when it is decided. The message doesn't carry the reason; the
+pending list does. Nothing arriving there: check `gateway_alerts_total{result="failed"}`
+and the log for `alert webhook failed`. The request is in the queue either way.
+
 The grant lasts until the end of the month and applies within ten seconds on every
 replica. Nobody can decide their own request. A team at its cap is not covered by this:
 raise the team's budget in `limits.yaml` by pull request.

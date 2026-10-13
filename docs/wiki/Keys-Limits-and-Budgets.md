@@ -276,6 +276,16 @@ spend_exceptions:
 - The request, refused attempts to decide, and the decision are in the decision log
   (`spend_exception:request`, `:approve`, `:deny`); decisions are also in the admin audit
   log. The reason is stored with the request and in neither log.
+- Approvers are told when a request is made and when it is decided
+  ([ADR 0034](../decisions/0034-telling-approvers-about-spend-exceptions.md)): a post to
+  `SPEND_EXCEPTIONS_WEBHOOK_URL` (Slack-compatible), or to the alert webhook if that is
+  unset. It carries who, how much and which month, never the reason or the note:
+
+```json
+{"text": "🙋 AI gateway: batch-job asks for $30.00 more budget for 2026-10. Review: GET /v1/spend/exceptions?status=pending",
+ "kind": "spend_exception", "event": "requested", "id": "…", "subject": "key:…", "who": "batch-job",
+ "amount_usd": 30, "granted_usd": null, "period": "2026-10", "decided_by": null}
+```
 
 | Response | Meaning |
 |----------|---------|

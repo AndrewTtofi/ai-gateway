@@ -185,8 +185,11 @@ Known gaps, on purpose or not yet done:
 
 - **The data class is declared by the caller**, not detected from content.
 - **No UI.** Operators use `make` targets and the API; Grafana shows usage.
-- **Approvers aren't notified** of a pending spend exception; they list the queue.
-- **Decision records are never deleted automatically.** Usage rows have a retention job; decisions don't yet.
+- **The person who asked for a spend exception isn't told the outcome**; they list their
+  own requests. Approvers are told through a webhook, which is tested against a stand-in,
+  not a real chat workspace.
+- **Decision records are kept until you set an age.** The retention job is off until
+  `DECISION_RETENTION_DAYS` is set.
 - **The gateway's own tools act as its app**, not as the person asking. Acting as each
   user is done by a separate server,
   [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed), which
@@ -227,6 +230,12 @@ raises one caller's budget for one month, so nothing has to be undone. Grants ar
 up only after a request is refused, so everyone under budget pays nothing for the
 feature. *Trade-off:* an approval takes up to ten seconds to reach other replicas.
 [ADR 0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md)
+
+**Approvers are told, but not why.** A request and its decision are posted to a webhook
+with who, how much and which month. The requester's reason is free text from a caller, so
+it stays in the queue, where only approvers can read it. *Trade-off:* an approver can't
+decide from chat alone.
+[ADR 0034](docs/decisions/0034-telling-approvers-about-spend-exceptions.md)
 
 **Connectors hold a key, not a token.** A GitHub App's private key is traded for a
 one-hour token asked for with less permission than the app has. *Trade-off:* calls are
@@ -296,6 +305,7 @@ whom, not which case. That belongs in the system of record's own log.
 | [0031](docs/decisions/0031-github-app-credentials-for-connectors.md) | Short-lived connector credentials: a GitHub App |
 | [0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md) | Soft caps and a spend exception queue |
 | [0033](docs/decisions/0033-decisions-for-external-tool-servers.md) | Decisions for external tool servers |
+| [0034](docs/decisions/0034-telling-approvers-about-spend-exceptions.md) | Telling approvers about spend exceptions |
 
 </details>
 

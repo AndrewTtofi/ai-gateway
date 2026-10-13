@@ -65,5 +65,6 @@ request, where the approver needs it, and never copied into either log.
   everywhere in the policy. Keep approver groups to people unless a service should decide.
 - The request and approval go through the API. There is no notification to approvers
   beyond the pending list; a chat or ticket integration would sit on top of these endpoints.
+  (Added later: ADR 0034 tells approvers through a webhook.)
 - A request made at the end of a month and approved in the next applies to the month it
   was made in, and so does nothing. The requester asks again.

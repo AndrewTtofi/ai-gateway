@@ -8,10 +8,10 @@ Keep "Current state" short and always true.
 - **Phase:** 20, decisions for external tool servers, done (ADR 0033). v2.1.0.
 - **Branch:** `main`. Remote `github.com/AndrewTtofi/ai-gateway` (public). Pull requests are rebase-merged once CI is green.
 - **Status:**
-  - `make test`: 814 pass; the integration tests skip without Redis and Postgres; lint clean.
+  - `make test`: 820 pass; the integration tests skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
 - **Released:** v2.0.0 (2026-10-12), v2.1.0 (2026-10-13).
-- **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, approver notifications. In progress: running this gateway with mcp-atlassian-governed against a real Atlassian site (demo credentials in the two repos' gitignored `.env` files).
+- **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, the injection classifier under the data-class ceiling. In progress: running this gateway with mcp-atlassian-governed against a real Atlassian site (demo credentials in the two repos' gitignored `.env` files).
 - **Blockers:** none.
 - **Open questions:**
   - The wiki workflow publishes on merge; relative links to files outside the wiki don't resolve on the Wiki tab.
@@ -22,6 +22,20 @@ Keep "Current state" short and always true.
 ---
 
 ## Session log
+
+### 2026-10-13 — Session 25 (approver notifications)
+**Did**
+- Approvers are told when a spend exception is requested and when it is decided (ADR 0034):
+  a webhook of their own (`SPEND_EXCEPTIONS_WEBHOOK_URL`) or the alert webhook.
+- `Alerts.deliver` takes a URL, so one sender and one once-only rule serve both channels.
+- mcp-atlassian-governed got `atlassian_unlink` (its v0.2.0), the gap the live run found.
+
+**Learned**
+- The reason on a request is input from a caller. Copying it into a chat channel sends
+  text an outsider chose to wherever people, and bots, read. The message says where to
+  read it instead.
+- Notify after the record is written and never in the request's own time: the queue is
+  the control, the message is a convenience.
 
 ### 2026-10-13 — Session 24 (CI on main, decision-log retention)
 **Did**

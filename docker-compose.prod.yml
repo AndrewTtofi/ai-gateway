@@ -32,6 +32,7 @@ x-gateway: &gateway
     DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
     OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
     ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL:-}
+    SPEND_EXCEPTIONS_WEBHOOK_URL: ${SPEND_EXCEPTIONS_WEBHOOK_URL:-}
     # Identity (ADR 0029). Empty: only gateway API keys are accepted, and SCIM is off.
     OIDC_ISSUER: ${OIDC_ISSUER:-}
     OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}

@@ -35,6 +35,7 @@ Configuration has two layers:
 | `GITHUB_APP_ID`, `GITHUB_APP_INSTALLATION_ID`, `GITHUB_APP_PRIVATE_KEY_FILE` | — | The GitHub connector; the key is a file path. Any empty: the connector answers 503 ([Connectors](Connectors.md)) |
 | `GITHUB_API_URL` | `https://api.github.com` | For GitHub Enterprise Server |
 | `ALERT_WEBHOOK_URL` | — | Slack-compatible webhook for breaker alerts ([Self-healing](Self-Healing.md)); the variable name is set by `self_healing.alert_webhook_env` |
+| `SPEND_EXCEPTIONS_WEBHOOK_URL` | — | Slack-compatible webhook for the approvers of spend exceptions ([Budgets](Keys-Limits-and-Budgets.md#spend-exceptions)). Empty: `ALERT_WEBHOOK_URL` is used |
 
 ## `config/models.yaml`
 
