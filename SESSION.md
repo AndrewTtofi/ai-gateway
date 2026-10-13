@@ -17,7 +17,7 @@ Keep "Current state" short and always true.
   - The wiki workflow publishes on merge; relative links to files outside the wiki don't resolve on the Wiki tab.
   - The optional guardrail classifier isn't covered by the secondary-use ceiling yet (ADR 0028).
   - Okta's and Entra's SCIM forms are covered by unit tests from their docs, not by a live tenant.
-  - `/v1/authorize` and the MCP server ran together against a live Atlassian site (Confluence read, 2026-10-13). A Jira read returned 404 on a site that probably has no Jira: unconfirmed. Writes untested.
+  - `/v1/authorize` and the MCP server ran together against a live Atlassian site (Confluence read and Jira search, 2026-10-13). Writes untested.
 
 ---
 
@@ -29,10 +29,11 @@ Keep "Current state" short and always true.
 - `prune-decisions --days N [--dry-run]`, `make prune-decisions`, and a daily `prune-decisions` service in the production stack, off until `DECISION_RETENTION_DAYS` is set. No default age: it is the audit record.
 - Suite: 864 pass against real Redis and Postgres.
 
-- Ran the gateway and mcp-atlassian-governed together live: authentik sign-in in the MCP Inspector, Atlassian link, a Confluence search as the signed-in user; every call is an `allow` in `make decisions` under the user. Demo shortcut: the authentik user was added to the gateway directory by hand (SCIM call), not synced.
+- Ran the gateway and mcp-atlassian-governed together live: authentik sign-in in the MCP Inspector, Atlassian link, a Confluence search and a Jira search as the signed-in user; every call is an `allow` in `make decisions` under the user. Demo shortcut: the authentik user was added to the gateway directory by hand (SCIM call), not synced.
 - That run found a bug in the MCP server (uncommitted in its repo, with a test): the sign-in code was redeemed at the compose-internal address, authentik named that host as the token's issuer, and the check refused it. The token request now sends the issuer's host.
 
 **Learned**
+- Atlassian ties a user's consent to the products on the site when they approve. Jira was added after the first link: the search went 404 (no Jira) then 403 (Jira, but the old grant), and worked after the grant was deleted and the user linked again. The server has no way to re-link short of revoking the app or deleting the row.
 - A provider that derives the issuer from the request's Host breaks any server that reaches it by a different name than its users do. The README had marked browser sign-in "not yet exercised"; this is what that meant.
 - A `.env` at the repo root changes what unit tests do: the Docker hostnames in it don't resolve on the host and app-starting tests hang. Move it aside to run the suite on the host.
 - Two suite runs against one Postgres and Redis block each other; run one.
