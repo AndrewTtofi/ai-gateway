@@ -74,6 +74,8 @@ def oidc() -> Verifier | None:
     ):
         _verifier = Verifier(s.oidc_issuer, s.oidc_audience, s.oidc_jwks_url)
     return _verifier
+
+
 _decision_writer: PostgresDecisionWriter | None = None
 
 log = logging.getLogger(__name__)
