@@ -1,15 +1,22 @@
 name: evals
-# The model turn-up gate (ADR 0030): run the golden tasks on the current and the candidate
-# model with real calls, and fail if the candidate regresses. Started by hand, because it
-# spends money; attach its summary to the pull request that changes the model.
+# The model turn-up gate (ADR 0030, 0035): the golden tasks on the current and the
+# candidate model, compared by the shared eval action, which calls both models through
+# this gateway's own API. The comparison takes the governed path: a key with a budget, a
+# declared data class, and a decision record for every call.
 #
-# Needs the provider keys of the two models as repository secrets (ANTHROPIC_API_KEY,
-# OPENAI_API_KEY). A provider without a key can't be evaluated: the run ends with exit 2.
+# Two ways in:
+#   by hand         real models, named in the inputs. It spends money, so it is never
+#                   automatic; attach its summary to the pull request that changes the
+#                   model. Needs the two models' provider keys as repository secrets
+#                   (ANTHROPIC_API_KEY, OPENAI_API_KEY).
+#   pull request    the same path with the fake provider's models, when the harness, the
+#                   golden tasks or the model config change. No keys, no spend. It shows
+#                   the wiring works, and says nothing about any real model.
 on:
   workflow_dispatch:
     inputs:
       current:
-        description: The model in use today (an alias or provider/model)
+        description: The model in use today (provider/model; an alias is answered by whatever its chain falls back to)
         required: true
       candidate:
         description: The model being considered
@@ -17,33 +24,87 @@ on:
       runs:
         description: Repeats per task (every run must pass)
         default: "3"
+  pull_request:
+    paths:
+      - evals/**
+      - scripts/eval_stack.sh
+      - config/models.yaml
+      - config/policy.yaml
+      - config/pricing.yaml
+      - .github/workflows/evals.yml
 
 permissions:
   contents: read
 
+concurrency:
+  group: evals-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   evals:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
+    env:
+      # Inputs reach scripts through the environment, never by being pasted into them.
+      CURRENT: ${{ inputs.current || 'fake/ok' }}
+      CANDIDATE: ${{ inputs.candidate || 'fake/metered' }}
+      RUNS: ${{ inputs.runs || '1' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with: { persist-credentials: false }
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with: { python-version: "3.14", cache: pip, cache-dependency-path: requirements-dev.txt }
       - run: pip install --require-hashes -r requirements-dev.txt
-      - name: golden tasks, current vs candidate
+
+      # Turn-up has an order: a model must be in models.yaml and have a data-handling
+      # rule in policy.yaml before it is evaluated. Then the three files the action
+      # reads are written from this repository's own config.
+      - name: turn-up check, and the files the action reads
+        env:
+          GATEWAY_ENABLE_FAKE: "1"   # the stack below loads the fake provider too
+        run: python -m evals.export --current "$CURRENT" --candidate "$CANDIDATE" --out "$RUNNER_TEMP/eval"
+
+      - name: start the gateway and create a key for this run
+        id: stack
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          # Inputs go through the environment, never into the script text.
-          CURRENT: ${{ inputs.current }}
-          CANDIDATE: ${{ inputs.candidate }}
-          RUNS: ${{ inputs.runs }}
+          EVAL_BUDGET_USD: "5"   # the most this run can spend, enforced by the gateway
         run: |
-          set -o pipefail
-          python -m evals.run_evals --current "$CURRENT" --candidate "$CANDIDATE" --runs "$RUNS" \
-            --json evals.json | tee evals.txt
-      - name: summary
+          key="$(scripts/eval_stack.sh up)"
+          echo "::add-mask::$key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+
+      # The one action here that isn't GitHub's: this project's own, pinned to a commit.
+      - name: golden tasks, current vs candidate, through the gateway
+        id: eval
+        uses: AndrewTtofi/model-eval-action@2e82e3748d48e6cf91e3b44e37b8c12a3d832485 # v0.1.0
+        with:
+          golden: ${{ runner.temp }}/eval/golden.yaml
+          tools: ${{ runner.temp }}/eval/tools.json
+          prices: ${{ runner.temp }}/eval/prices.yaml
+          current: ${{ env.CURRENT }}
+          candidate: ${{ env.CANDIDATE }}
+          runs: ${{ env.RUNS }}
+          base-url: http://127.0.0.1:8000/v1
+          api-key: ${{ steps.stack.outputs.key }}
+          # The golden tasks hold nothing sensitive. And never the response cache: an
+          # alias may have one, and a repeat must be the model's answer, not a stored one.
+          headers: |
+            x-gateway-data-class: public
+            x-gateway-cache: bypass
+          # The report goes to the run's summary. On a pull request the models are
+          # fakes, and a comment saying "no regressions" about them would mislead.
+          comment: "false"
+
+      - name: every call the action made is in the decision log
+        if: always() && steps.stack.outputs.key != ''
+        env:
+          REPORT: ${{ steps.eval.outputs.json }}
+        run: |
+          calls="$(python3 -c 'import json,sys; print(sum(t["calls"] for t in json.load(open(sys.argv[1]))["totals"].values()))' "$REPORT")"
+          scripts/eval_stack.sh check "$calls"
+
+      - name: stop the gateway
         if: always()
-        run: |
-          { echo '```'; cat evals.txt 2>/dev/null || echo "no output"; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+        run: scripts/eval_stack.sh down

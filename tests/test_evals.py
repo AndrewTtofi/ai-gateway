@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from pydantic import ValidationError
 
 from app import config, connectors, main
@@ -276,3 +277,54 @@ def test_a_provider_without_a_key_is_inconclusive_not_a_failed_task(
     code = run_evals.main(["--current", "claude-new", "--candidate", "claude-new"])
     out = capsys.readouterr().out
     assert code == 2 and "ERROR" in out and "not configured" in out
+
+
+# --- what the shared eval action is handed (ADR 0035) --------------------------------------
+
+
+def test_the_export_names_tools_as_a_model_sees_them_and_only_real_ones() -> None:
+    from app import connectors
+    from evals import export
+
+    offered = {d["function"]["name"] for d in connectors.tool_definitions()}
+    wanted = {
+        check["tool_call"]
+        for t in export.golden_for_models()["tasks"]
+        for check in t["checks"]
+        if check.get("tool_call")
+    }
+    assert wanted and wanted <= offered  # the action compares names as they come back
+    assert all("." not in name for name in wanted)  # a function name can't hold a dot
+    assert len(export.golden_for_models()["tasks"]) == len(run_evals.load_golden())
+
+
+def test_the_export_prices_a_model_under_the_name_it_is_called_by(
+    registry: config.Registry, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from evals import export
+
+    primary = config.registry.resolve("local")[0]
+    pricing = config.Pricing.model_validate({"models": {primary: {"input": 1.5, "output": 6}}})
+    monkeypatch.setattr(config, "pricing", pricing)
+    # An alias is priced as its primary; a target without a price is left out (unpriced).
+    assert export.prices_for(["local", primary, "local"]) == {
+        "models": {"local": {"input": 1.5, "output": 6.0}, primary: {"input": 1.5, "output": 6.0}}
+    }
+    monkeypatch.setattr(config, "pricing", config.Pricing())
+    assert export.prices_for(["local"]) == {"models": {}}
+
+
+def test_nothing_is_exported_for_a_model_that_is_not_ready_for_turn_up(
+    registry: config.Registry, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from evals import export
+
+    out = tmp_path / "eval"
+    code = export.main(["--current", "local", "--candidate", "nope/model", "--out", str(out)])
+    assert code == 2 and not out.exists()
+    assert "not a model or alias" in capsys.readouterr().err
+    assert export.main(["--current", "local", "--candidate", "local", "--out", str(out)]) == 0
+    assert sorted(p.name for p in out.iterdir()) == ["golden.yaml", "prices.yaml", "tools.json"]
+    tools = json.loads((out / "tools.json").read_text())
+    assert tools and all(t["type"] == "function" for t in tools)
+    assert yaml.safe_load((out / "golden.yaml").read_text())["tasks"][0]["id"]

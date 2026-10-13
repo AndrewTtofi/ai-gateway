@@ -11,3 +11,6 @@ tests/load/results/
 
 # Agent worktrees (Claude Code)
 .claude/worktrees/
+
+# scripts/eval_stack.sh: marks a .env it generated, so `down` removes only that
+.env.created-by-eval-stack
