@@ -178,7 +178,7 @@ mover and a leaver against authentik and checks the audit trail (about two minut
 | **Decisions for external tool servers** | **Real** endpoint (`POST /v1/authorize`), used by [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed), an MCP server that acts as each user. Tested on both sides, and run together once against a live Atlassian site (sign-in, account link, a Confluence read and a Jira search, each call decided and logged here). Writes are untested live. |
 | **`mock_records` connector** | **Mocked.** A stand-in for a system of record, with one case in it, so the policy path can be shown without another system. |
 | **`fake` provider and the `chaos` tier** | **Mocked**, dev stack only. Scripted failures and a priced test model for demos and load tests. Never loaded in production. |
-| **Eval gate** | **Real** harness and golden tasks. Run live between two local models; not yet between hosted models. CI runs it against a deterministic stub. |
+| **Eval gate** | **Real** harness and golden tasks. Run live between two local models; not yet between hosted models. CI runs it against a deterministic stub. The `evals` workflow runs it with [model-eval-action](https://github.com/AndrewTtofi/model-eval-action) through this gateway's own API: on pull requests with the fake provider's models, and once locally with a model served by Ollama. |
 | **Benchmark numbers** | Measured on one laptop against a mock provider that replays real timing ([RESULTS.md](docs/RESULTS.md)). |
 
 Known gaps, on purpose or not yet done:
@@ -247,6 +247,12 @@ the current model passes. A task both fail is information, not a blocker. *Trade
 says nothing about absolute quality, and live runs cost money, so CI only checks the
 harness. [ADR 0030](docs/decisions/0030-eval-gate-for-model-changes.md)
 
+**The eval is a client of the gateway, not a way around it.** The workflow that decides a
+model change calls both models through the gateway's API with a key of its own: a budget
+the gateway enforces, a declared data class, a decision record per call. *Trade-off:* it
+grades the gateway's path, not the provider alone, and the check rules live in two
+repositories. [ADR 0035](docs/decisions/0035-the-eval-gate-through-the-gateways-own-api.md)
+
 **A bundled identity provider instead of a hosted one.** authentik runs in the compose
 stack, so the whole identity flow is tested in CI with no account or tunnel.
 *Trade-off:* Okta's and Entra's behaviour is covered from their documentation, not a tenant.
@@ -306,6 +312,7 @@ whom, not which case. That belongs in the system of record's own log.
 | [0032](docs/decisions/0032-soft-caps-and-spend-exceptions.md) | Soft caps and a spend exception queue |
 | [0033](docs/decisions/0033-decisions-for-external-tool-servers.md) | Decisions for external tool servers |
 | [0034](docs/decisions/0034-telling-approvers-about-spend-exceptions.md) | Telling approvers about spend exceptions |
+| [0035](docs/decisions/0035-the-eval-gate-through-the-gateways-own-api.md) | The eval gate runs through the gateway's own API |
 
 </details>
 
@@ -327,7 +334,7 @@ The gateway is the centre of a small set. Each of the others feeds it, asks it o
 |---------|--------------|
 | [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed) | An MCP server for Jira and Confluence that acts as the signed-in user, and asks this gateway whether each tool call is allowed |
 | [ai-entitlements-terraform](https://github.com/AndrewTtofi/ai-entitlements-terraform) | The identity provider's side as code: the groups, apps and token policies this gateway's policy refers to, checked against `config/policy.yaml` |
-| [model-eval-action](https://github.com/AndrewTtofi/model-eval-action) | This gateway's eval gate as a reusable GitHub Action |
+| [model-eval-action](https://github.com/AndrewTtofi/model-eval-action) | This gateway's eval gate as a reusable GitHub Action. The `evals` workflow here uses it, against this gateway |
 | [ai-spend-finops](https://github.com/AndrewTtofi/ai-spend-finops) | What the vendors billed, including traffic that never passes a gateway: commitments, caps, anomalies and unused seats |
 
 ## The routing layer

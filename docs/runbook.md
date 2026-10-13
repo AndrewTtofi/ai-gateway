@@ -86,6 +86,9 @@ Revoke with `DELETE /admin/keys/{id}`; it takes effect within 30 seconds on ever
    provider's contract. A model with no rule gets no data and can't be evaluated.
 2. Run the eval gate: `make evals current=<provider/model> candidate=<provider/model>`.
    Exit 0: no regression. Exit 1: the report names the tasks the candidate lost.
+   For the record that goes on the pull request, run the `evals` workflow instead
+   (Actions → evals): the same tasks through the gateway, under a key with a $5 budget,
+   every call in the decision log.
 3. Change the chain in `config/models.yaml`, add the price in `config/pricing.yaml`,
    merge, `make reload`.
 4. Watch the per-model panels in Grafana for an hour.

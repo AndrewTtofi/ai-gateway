@@ -9,7 +9,7 @@ a plan, not a promise. Each item says **why** it matters, so the order can chang
 
 | Item | Why |
 |------|-----|
-| **Run the eval gate between two hosted models** | It has only compared two local models so far |
+| **Run the eval gate between two hosted models** | It has only compared local models so far. The workflow is ready (the shared action, through this gateway, ADR 0035); it needs provider keys and approved spend |
 | **Verify SCIM and OIDC against a hosted identity provider** (Okta, Entra) | Their request forms are covered from documentation, not a live tenant |
 | **Run this gateway and the MCP server together** against a real Atlassian site | Done for sign-in, account linking, a Confluence read and a Jira search (2026-10-13). Still to confirm live: writes |
 | ~~**Notify approvers** of a pending spend exception~~ | Done: a webhook on request and on decision (ADR 0034). Not yet: telling the requester, reminders for a request left pending |
