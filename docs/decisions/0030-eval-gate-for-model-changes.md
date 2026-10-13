@@ -55,7 +55,8 @@ when users already have it.
   against "dearer" and "slower".
 - **CI** runs the harness with `--offline`: the baseline stub must pass and a regressed
   stub must fail. The **`evals` workflow** runs the real gate by hand and writes the table
-  to the job summary, to attach to the pull request that changes the model.
+  to the job summary, to attach to the pull request that changes the model. (Since
+  ADR 0035 that workflow calls the models through the gateway's API, not the adapters.)
 
 ## Consequences
 - A model change comes with evidence a reviewer can read in a minute.

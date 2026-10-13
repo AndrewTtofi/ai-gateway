@@ -29,6 +29,9 @@ Keep "Current state" short and always true.
   a webhook of their own (`SPEND_EXCEPTIONS_WEBHOOK_URL`) or the alert webhook.
 - `Alerts.deliver` takes a URL, so one sender and one once-only rule serve both channels.
 - mcp-atlassian-governed got `atlassian_unlink` (its v0.2.0), the gap the live run found.
+- The `evals` workflow uses model-eval-action through the gateway's API (ADR 0035), with
+  `evals.export` and `scripts/eval_stack.sh`. Run locally in Docker with the fake models
+  and with `llama3.2:3b` through Ollama; hosted models still need keys.
 
 **Learned**
 - The reason on a request is input from a caller. Copying it into a chat channel sends
@@ -36,6 +39,10 @@ Keep "Current state" short and always true.
   read it instead.
 - Notify after the record is written and never in the request's own time: the queue is
   the control, the message is a convenience.
+- The action calls a model once when current and candidate are the same name, so six
+  tasks made six decision records, not twelve. Count what the report says was called.
+- The response cache is per alias and off by default; the eval sends the bypass header
+  anyway, because the day an alias gets a cache a repeat would grade the cache.
 
 ### 2026-10-13 — Session 24 (CI on main, decision-log retention)
 **Did**

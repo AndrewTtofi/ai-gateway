@@ -8,6 +8,7 @@
 | `scripts/e2e_prod.sh` | The production compose stack, end to end, with the fake provider | Free; CI runs it on every PR |
 | `scripts/identity_e2e.sh` (`make idp-e2e`) | A real identity provider (authentik) in the stack: a user is provisioned over SCIM, calls with an OIDC token, changes group, is deactivated | Free; CI runs it on every PR |
 | `make policy` | The access policy against the rest of the config | Free; CI runs it |
+| `evals` workflow on a pull request | The eval action against a running gateway with the fake provider's models: the export, the key, the headers and the decision log ([Model evals](Model-Evals.md)) | Free; CI runs it when they change |
 | `python -m evals.run_evals --offline …` | The eval harness against a deterministic stub: it must pass a baseline and fail a regression | Free; CI runs it. The live gate costs money ([Model evals](Model-Evals.md)) |
 | `make test-e2e` | Against the running stack (`make up`) and Ollama: limits, chaos, local model | Free |
 | `make test-live` | Everything, including `@pytest.mark.live` tests against real providers | Costs money |

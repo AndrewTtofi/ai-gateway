@@ -18,6 +18,12 @@ Version plan: each completed phase bumps the minor version
   made and when it is approved or denied, to `SPEND_EXCEPTIONS_WEBHOOK_URL` or, without
   it, the alert webhook. Once per step across replicas, in the background, and without
   the requester's reason or the approver's note.
+- The `evals` workflow compares models with
+  [model-eval-action](https://github.com/AndrewTtofi/model-eval-action) through the
+  gateway's own API (ADR 0035): `python -m evals.export` writes the golden tasks, tool
+  definitions and prices for it, and `scripts/eval_stack.sh` starts the gateway, creates
+  a key with a budget for the run, and checks the run's calls against the decision log.
+  Pull requests that touch the harness or the model config run it with the fake models.
 
 ### Docs
 - README: soft and hard caps in the tier table, `config/policy.yaml` in the config table,

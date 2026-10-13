@@ -109,9 +109,35 @@ The order is enforced:
 - **Every pull request:** the harness runs with `--offline`. Deterministic stubs stand in
   for the models: the baseline must pass, and a regressed stub must fail the gate. This
   checks the harness and the golden file. It says nothing about a real model.
-- **The `evals` workflow** (Actions → evals → Run workflow) runs the real comparison with
-  the repository's provider keys and writes the table to the job summary. It is started
-  by hand because it spends money.
+- **The `evals` workflow** (Actions → evals → Run workflow) runs the real comparison and
+  writes the report to the job summary. It is started by hand because it spends money.
+- **A pull request that changes `evals/`, `models.yaml`, `policy.yaml` or `pricing.yaml`**
+  runs that same workflow with the fake provider's models: no keys, no spend. It checks
+  the wiring, not a model.
+
+### Through the gateway
+
+The workflow doesn't call the providers. It starts the gateway, and
+[model-eval-action](https://github.com/AndrewTtofi/model-eval-action) calls both models
+through `/v1/chat/completions` like any application
+([ADR 0035](../decisions/0035-the-eval-gate-through-the-gateways-own-api.md)):
+
+```bash
+python -m evals.export --current openai/gpt-6-luna --candidate anthropic/claude-haiku-4-5-20251001 --out build/eval
+#   turn-up check first, then golden.yaml, tools.json and prices.yaml for the action
+scripts/eval_stack.sh up        # the gateway, and a key for this run: any model, $5 budget
+#   … the action runs, with x-gateway-data-class: public and x-gateway-cache: bypass …
+scripts/eval_stack.sh check 36  # that many calls by the key are "allow" in the decision log
+scripts/eval_stack.sh down
+```
+
+- The run can't spend more than the key's budget, and every call it made is in the
+  decision log under the key's name (`model-evals`).
+- Name a `provider/model`, not an alias, to judge one model: an alias falls back along
+  its chain, and the eval would grade whatever answered.
+- The cache is bypassed so that a repeat is the model's answer.
+- The provider keys go to the gateway, as repository secrets `ANTHROPIC_API_KEY` and
+  `OPENAI_API_KEY`. The action never sees them.
 
 ## Limits
 
