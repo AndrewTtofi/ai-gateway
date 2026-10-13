@@ -165,6 +165,22 @@ services:
     depends_on:
       migrate: { condition: service_completed_successfully }
 
+  # Daily decision_log retention. Off unless DECISION_RETENTION_DAYS is set: the decision log
+  # is the audit record, so the age is your compliance rules' call, not a default.
+  prune-decisions:
+    networks: [data]
+    <<: *gateway
+    restart: unless-stopped
+    command: >-
+      sh -c 'while true; do if [ -n "$${DECISION_RETENTION_DAYS:-}" ]; then python -m app.maintenance prune-decisions --days "$${DECISION_RETENTION_DAYS}"; fi; sleep 86400; done'
+    healthcheck: { disable: true }
+    environment:                         # the database only
+      DATABASE_URL: postgresql+asyncpg://gateway:${POSTGRES_PASSWORD:?}@postgres:5432/gateway
+      CONFIG_DIR: /app/config
+      DECISION_RETENTION_DAYS: ${DECISION_RETENTION_DAYS:-}
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   # Daily pg_dump, kept BACKUP_KEEP_DAYS days in the pg-backups volume (copy it off-host
   # too). Restore and the restore drill: docs/wiki/Runbooks.md#backups. Only the database
   # password reaches this container.

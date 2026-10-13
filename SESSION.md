@@ -11,7 +11,7 @@ Keep "Current state" short and always true.
   - `make test`: 814 pass; the integration tests skip without Redis and Postgres; lint clean.
   - CI runs: tests with fuzzing, the policy check, the offline eval check, pip-audit, a Trivy image scan, an end-to-end job on the production compose stack, and an identity job against authentik.
 - **Released:** v2.0.0 (2026-10-12), v2.1.0 (2026-10-13).
-- **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, approver notifications, decision-log retention.
+- **Next up:** see [the roadmap](docs/wiki/Roadmap.md): a live eval between hosted models, a hosted identity provider, approver notifications. In progress: running this gateway with mcp-atlassian-governed against a real Atlassian site (demo credentials in the two repos' gitignored `.env` files).
 - **Blockers:** none.
 - **Open questions:**
   - The wiki workflow publishes on merge; relative links to files outside the wiki don't resolve on the Wiki tab.
@@ -22,6 +22,16 @@ Keep "Current state" short and always true.
 ---
 
 ## Session log
+
+### 2026-10-13 — Session 24 (CI on main, decision-log retention)
+**Did**
+- Runs on `main` were `cancelled`, not skipped: `cancel-in-progress` on a shared ref group. Now only superseded PR runs cancel (PR #12).
+- `prune-decisions --days N [--dry-run]`, `make prune-decisions`, and a daily `prune-decisions` service in the production stack, off until `DECISION_RETENTION_DAYS` is set. No default age: it is the audit record.
+- Suite: 864 pass against real Redis and Postgres.
+
+**Learned**
+- A `.env` at the repo root changes what unit tests do: the Docker hostnames in it don't resolve on the host and app-starting tests hang. Move it aside to run the suite on the host.
+- Two suite runs against one Postgres and Redis block each other; run one.
 
 ### 2026-10-13 — Session 23 (external tool servers, documentation sweep)
 **Did**

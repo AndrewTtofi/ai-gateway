@@ -47,6 +47,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod --profile monitor
 | `redis` | Rate limits, budgets, breakers. Password from a config file (not visible in `ps`), append-only persistence |
 | `redis-cache` | The response cache only: capped at `CACHE_MAXMEMORY` (512 MB) with LRU eviction, no persistence. Clients decide how fast a cache grows, so it's kept away from limits and budgets (ADR 0023) |
 | `postgres` | Keys, the directory (users and groups), the decision log, usage log, admin audit log, spend exceptions, judge scores |
+| `prune-decisions` | Deletes `decision_log` rows older than `DECISION_RETENTION_DAYS` every day. Does nothing while that is empty (the default): the decision log is the audit record, so the age is yours to choose. Gets only the database URL |
 | `prune-usage` | Deletes `usage_log` rows older than `USAGE_RETENTION_DAYS` (default 90) every day. Gets only the database URL |
 | `backup` | Daily `pg_dump` (custom format) into the `pg-backups` volume, kept `BACKUP_KEEP_DAYS` (14). Gets only the database password. Restore and restore drill: [Runbooks](Runbooks.md#backups) |
 | `alertmanager` *(monitoring)* | Sends Prometheus alerts to `ALERTMANAGER_SLACK_URL` (Slack-compatible webhook), each with a link to its [runbook](Runbooks.md). Without a URL, alerts are only on its own page, `127.0.0.1:9093` |
@@ -99,6 +100,8 @@ docker compose -f docker-compose.prod.yml exec gateway python -m app.maintenance
 docker compose -f docker-compose.prod.yml exec gateway python -m app.maintenance grant-readonly --role grafana_ro
 ```
 
+- **Decision log retention:** `prune-decisions --days N` (`make prune-decisions DAYS=365`)
+  deletes the same way and has no default age. `--dry-run` (`DRY=1`) counts what would go.
 - **Retention:** `prune` deletes in batches, with short transactions. Export spend history
   you need for finance before it's pruned.
 - **Read-only role:** `grant-readonly` creates or updates the role. The password

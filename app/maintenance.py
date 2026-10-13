@@ -5,6 +5,11 @@ python -m app.maintenance prune --days 90
     request) doesn't grow forever. Spend history is in usage_log only: export what
     you need for finance before pruning it.
 
+python -m app.maintenance prune-decisions --days 365 [--dry-run]
+    Delete decision_log rows older than N days, the same way. The decision log is the
+    audit record, so there is no default age: keep it as long as your compliance rules
+    say, and run with --dry-run first to see how many rows would go.
+
 python -m app.maintenance grant-readonly --role grafana_ro
     Create or update a read-only login for dashboards. It can read usage_log, judge_scores and the
     non-secret columns of api_keys — never key_hash. Password from $READONLY_PASSWORD.
@@ -32,19 +37,38 @@ READABLE_KEY_COLUMNS = ("id", "name", "prefix", "tier", "team", "created_at", "r
 _ROLE = re.compile(r"[a-z_][a-z0-9_]{0,62}")
 
 
-async def prune(days: int, batch: int = 10_000) -> int:
-    """Delete rows older than `days`, `batch` at a time (short transactions, no long locks)."""
+# Tables the retention jobs may delete from, and the timestamp column each ages by. A fixed
+# map, because the names go into SQL text.
+_PRUNABLE = {"usage_log": "created_at", "decision_log": "at"}
+
+
+async def _prune_table(table: str, days: int, batch: int, dry_run: bool = False) -> int:
+    """Delete (or with `dry_run`, only count) rows older than `days`, `batch` at a time
+    (short transactions, no long locks)."""
     if days < 1 or batch < 1:
         raise ValueError("days and batch must be at least 1")
+    column = _PRUNABLE[table]
     engine = make_engine(config.settings.database_url, timeout=60)
-    deleted = 0
     try:
+        if dry_run:
+            async with engine.connect() as conn:
+                return int(
+                    await conn.scalar(
+                        text(
+                            f"SELECT count(*) FROM {table} "  # noqa: S608 (fixed names)
+                            f"WHERE {column} < now() - make_interval(days => :days)"
+                        ),
+                        {"days": days},
+                    )
+                    or 0
+                )
+        deleted = 0
         while True:
             async with engine.begin() as conn:
                 result = await conn.execute(
                     text(
-                        "DELETE FROM usage_log WHERE id IN (SELECT id FROM usage_log "
-                        "WHERE created_at < now() - make_interval(days => :days) LIMIT :batch)"
+                        f"DELETE FROM {table} WHERE id IN (SELECT id FROM {table} "  # noqa: S608
+                        f"WHERE {column} < now() - make_interval(days => :days) LIMIT :batch)"
                     ),
                     {"days": days, "batch": batch},
                 )
@@ -54,6 +78,16 @@ async def prune(days: int, batch: int = 10_000) -> int:
                 return deleted
     finally:
         await engine.dispose()
+
+
+async def prune(days: int, batch: int = 10_000) -> int:
+    """Delete usage_log rows older than `days`."""
+    return await _prune_table("usage_log", days, batch)
+
+
+async def prune_decisions(days: int, batch: int = 10_000, dry_run: bool = False) -> int:
+    """Delete decision_log rows older than `days` (or count them, with `dry_run`)."""
+    return await _prune_table("decision_log", days, batch, dry_run)
 
 
 def _literal(value: str) -> str:
@@ -125,15 +159,24 @@ def main(argv: list[str] | None = None) -> int:
     pr = sub.add_parser("prune", help="delete old usage_log rows")
     pr.add_argument("--days", type=int, required=True)
     pr.add_argument("--batch", type=int, default=10_000)
+    pd = sub.add_parser("prune-decisions", help="delete old decision_log rows")
+    pd.add_argument("--days", type=int, required=True)
+    pd.add_argument("--batch", type=int, default=10_000)
+    pd.add_argument("--dry-run", action="store_true", help="count, don't delete")
     gr = sub.add_parser("grant-readonly", help="read-only login for dashboards")
     gr.add_argument("--role", default="grafana_ro")
     args = p.parse_args(argv)
 
-    if args.cmd == "prune":
+    if args.cmd in ("prune", "prune-decisions"):
         if args.days < 1:
             p.error("--days must be at least 1")
         if args.batch < 1:
             p.error("--batch must be at least 1")
+        if args.cmd == "prune-decisions":
+            n = asyncio.run(prune_decisions(args.days, args.batch, args.dry_run))
+            verb = "would delete" if args.dry_run else "deleted"
+            print(f"{verb} {n} decision_log rows older than {args.days} days")
+            return 0
         deleted = asyncio.run(prune(args.days, args.batch))
         print(f"deleted {deleted} usage_log rows older than {args.days} days")
         return 0
