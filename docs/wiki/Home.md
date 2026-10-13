@@ -68,6 +68,19 @@ Every non-obvious decision has an ADR in
 [`docs/decisions/`](https://github.com/AndrewTtofi/ai-gateway/tree/main/docs/decisions).
 Each wiki page links to the ADRs behind it.
 
+## Related projects
+
+- [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed): an MCP
+  server that acts as each signed-in user and asks this gateway for the decision
+  ([Connectors](Connectors.md)).
+- [ai-entitlements-terraform](https://github.com/AndrewTtofi/ai-entitlements-terraform):
+  the identity provider's groups, apps and token policies as code, checked against this
+  gateway's policy ([Identity](Identity.md)).
+- [model-eval-action](https://github.com/AndrewTtofi/model-eval-action): the eval gate as
+  a reusable GitHub Action ([Model evals](Model-Evals.md)).
+- [ai-spend-finops](https://github.com/AndrewTtofi/ai-spend-finops): vendor bills against
+  commitments, caps and seats, including traffic that never passes a gateway.
+
 ## Keeping the wiki in sync
 
 The wiki's source lives in the main repo under

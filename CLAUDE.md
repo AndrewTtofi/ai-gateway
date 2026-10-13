@@ -4,9 +4,10 @@ Instructions for Claude Code working in this repo.
 
 ## Project
 Governed AI gateway for an enterprise AI platform: every request passes
-identity → policy → spend → routing → audit (ADR 0027). The routing half is built
-(multi-provider routing, fallback, rate limiting, cost tracking, observability); the
-governance layer is being added. Clients call it in the OpenAI chat-completions or the
+identity → policy → spend → routing → audit (ADR 0027). Both halves are built: routing
+(multi-provider routing, fallback, rate limiting, cost tracking, observability) and the
+governance layer in front of it (identity, policy, spend exceptions, connectors, the
+decision log, the eval gate). Clients call it in the OpenAI chat-completions or the
 Anthropic Messages format; that is the wire format, not what the project is.
 Full plan in `PLAN.md`. Current state in `SESSION.md`.
 

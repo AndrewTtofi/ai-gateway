@@ -172,7 +172,10 @@ Known gaps, on purpose or not yet done:
 - **No UI.** Operators use `make` targets and the API; Grafana shows usage.
 - **Approvers aren't notified** of a pending spend exception; they list the queue.
 - **Decision records are never deleted automatically.** Usage rows have a retention job; decisions don't yet.
-- **Tools act as the gateway's app**, not as the person asking.
+- **The gateway's own tools act as its app**, not as the person asking. Acting as each
+  user is done by a separate server,
+  [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed), which
+  asks this gateway for the decision.
 
 ## Design decisions and trade-offs
 
@@ -290,6 +293,17 @@ whom, not which case. That belongs in the system of record's own log.
 | [docs/runbook.md](docs/runbook.md) | Operating it: access, policy changes, spend, connectors, secrets, audit evidence |
 | [docs/enablement/](docs/enablement/README.md) | One capability explained for compliance, for the people using it, and for engineers |
 | [docs/wiki/](docs/wiki/Home.md) | Every part in depth: [identity](docs/wiki/Identity.md), [governance](docs/wiki/Governance.md), [connectors](docs/wiki/Connectors.md), [limits and budgets](docs/wiki/Keys-Limits-and-Budgets.md), [model evals](docs/wiki/Model-Evals.md), routing, operations, security |
+
+## Related projects
+
+The gateway is the centre of a small set. Each of the others feeds it, asks it or checks it:
+
+| Project | What it adds |
+|---------|--------------|
+| [mcp-atlassian-governed](https://github.com/AndrewTtofi/mcp-atlassian-governed) | An MCP server for Jira and Confluence that acts as the signed-in user, and asks this gateway whether each tool call is allowed |
+| [ai-entitlements-terraform](https://github.com/AndrewTtofi/ai-entitlements-terraform) | The identity provider's side as code: the groups, apps and token policies this gateway's policy refers to, checked against `config/policy.yaml` |
+| [model-eval-action](https://github.com/AndrewTtofi/model-eval-action) | This gateway's eval gate as a reusable GitHub Action |
+| [ai-spend-finops](https://github.com/AndrewTtofi/ai-spend-finops) | What the vendors billed, including traffic that never passes a gateway: commitments, caps, anomalies and unused seats |
 
 ## The routing layer
 
@@ -468,10 +482,14 @@ Errors use OpenAI's shape (`{"error": {"message", "type", "code"}}`):
 Keys look like `gw_…`. They are shown once and stored only as a SHA-256 hash. Each key has
 a tier from `config/limits.yaml`:
 
-| Tier | Requests/min | Tokens/min | Budget/month | In flight | Aliases |
-|------|-------------|-----------|--------------|-----------|---------|
-| `dev` | 60 | 50 000 | $10 | 10 | `fast`, `local` |
-| `standard` | 300 | 200 000 | $100 | 50 | `fast`, `balanced`, `smart`, `local`, `frontier`, `auto` |
+| Tier | Requests/min | Tokens/min | Soft cap/month | Hard cap/month | In flight | Aliases |
+|------|-------------|-----------|----------------|----------------|-----------|---------|
+| `dev` | 60 | 50 000 | $8 | $10 | 10 | `fast`, `local` |
+| `standard` | 300 | 200 000 | $80 | $100 | 50 | `fast`, `balanced`, `smart`, `local`, `frontier`, `auto` |
+
+Passing the soft cap sends an alert and nothing else. Passing the hard cap refuses the
+request, and the caller can ask for more through the exception queue
+([limits and budgets](docs/wiki/Keys-Limits-and-Budgets.md)).
 
 Usage the provider bills is billed to the key too: reasoning output, and a request cut off
 by a hang-up or a timeout, for at least the time the provider worked on it
@@ -507,7 +525,8 @@ covers adding a provider, a model or a price.
 | `config/models.yaml` | Providers, models, capability flags, aliases, timeouts, retry and breaker settings |
 | `config/pricing.yaml` | $ per 1M input / output / cached tokens per model (`make prices` to check) |
 | `config/catalog.yaml` | Context window, capabilities and your quality score per model |
-| `config/limits.yaml` | Rate limits, budgets and allowed aliases per tier |
+| `config/limits.yaml` | Rate limits, soft and hard caps and allowed aliases per tier; team budgets |
+| `config/policy.yaml` | Who may do what: groups, roles, tiers, data classes per model, connectors, approvers (`make policy` to check) |
 
 ## Observability
 
@@ -606,10 +625,14 @@ is a subscriber.
 Anthropic API key, and requests are billed to the provider API keys configured in the
 gateway, not to a subscription.
 
-**Is it only for chat?** Yes: `/v1/chat/completions` and `/v1/messages` (both with tools,
-images and streaming), plus `/v1/models` and `/v1/catalog`. Behind the scenes the gateway
-uses OpenAI's Responses API where a model requires it, and embedding models for the
-semantic cache. There are no public embeddings, image-generation or audio endpoints.
+**Is it only for chat?** For models, yes: `/v1/chat/completions` and `/v1/messages` (both
+with tools, images and streaming), plus `/v1/models` and `/v1/catalog`. Behind the scenes
+the gateway uses OpenAI's Responses API where a model requires it, and embedding models
+for the semantic cache. There are no public embeddings, image-generation or audio
+endpoints. Beside the model endpoints are the governed ones: `/v1/tools/{connector}/{tool}`
+to call a tool, `/v1/spend/exceptions` to ask for and approve more budget, and
+`/v1/authorize` for tool servers that ask the gateway for a decision
+([API reference](docs/wiki/API-Reference.md)).
 
 ## Development
 
