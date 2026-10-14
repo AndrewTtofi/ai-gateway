@@ -8,7 +8,7 @@ respx>=0.23
 ruff>=0.16
 mypy>=2.4
 types-PyYAML
-openai>=3.24
-pip-tools>=7.6
+openai>=3.26.0
+pip-tools>=7.6.2
 pip-audit>=2.10  # CI: known vulnerabilities in the locked dependencies
 hypothesis>=6.168  # property-based fuzzing of the format translators
