@@ -106,7 +106,7 @@ services:
 
   redis:
     networks: [data]
-    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    image: redis:8.10.2-alpine@sha256:9f8d2d789b9a1d1e3f283f979aa9cbf393373806472e1ccd460e2f9c869b833b
     restart: unless-stopped
     # The password goes into a config file, not the command line (visible in ps/inspect).
     command: >-
@@ -124,7 +124,7 @@ services:
   # persistence (a cache can be rebuilt). Limits and budgets stay in `redis`, uncapped.
   redis-cache:
     networks: [data]
-    image: redis:8.10.2-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
+    image: redis:8.10.2-alpine@sha256:9f8d2d789b9a1d1e3f283f979aa9cbf393373806472e1ccd460e2f9c869b833b
     restart: unless-stopped
     command: >-
       sh -c 'umask 077 && printf "requirepass %s\nmaxmemory %s\nmaxmemory-policy allkeys-lru\nsave \"\"\nappendonly no\n"
